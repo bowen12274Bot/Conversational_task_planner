@@ -16,6 +16,14 @@
   - 系統設計文件
   - 包含平台形式、技術架構、技術選型、資料設計方向與 AI 串接設計
 
+- [architecture.md](./architecture.md)
+  - 系統架構文件
+  - 包含專案目前的整體架構圖與前端、後端、資料層的實際分層說明
+
+- [quick_start.md](./quick_start.md)
+  - 快速啟動文件
+  - 包含前端、後端與資料庫初始化的基本指令
+
 - [development_plan](./development_plan)
   - 預留給後續開發計畫、時程安排與任務拆分使用
 
@@ -24,6 +32,7 @@
 1. `project_overview.md`
 2. `module_description.md`
 3. `system_design.md`
+4. `architecture.md`
 
 ## 備註
 

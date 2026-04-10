@@ -9,22 +9,25 @@
 
 ## 初次啟動順序
 
-1. 安裝前端套件 `npm run install:frontend`
-2. 安裝後端套件 `npm run install:backend`
-3. 初始化資料庫 `npm run init:backend`
-4. 啟動後端 `npm run dev:backend`
-5. 啟動前端 `npm run dev:frontend`
+1. 建立 python 虛擬環境 `npm run venv:create`
+2. 安裝前端套件 `npm run install:frontend`
+3. 安裝後端套件 `npm run install:backend`
+4. 初始化資料庫 `npm run init:backend`
+5. 啟動後端 `npm run dev:backend`
+6. 啟動前端 `npm run dev:frontend`
    
-## 第一次建置環境
+## 建置環境
 
 開啟powershell終端機，在專案根目錄執行：
 
 ```powershell
+npm run venv:create
 npm run install:frontend
 npm run install:backend
 ```
-第一個是下載本地的前端依賴套件
-第二個是下載本地的後端依賴套件
+第一個是建立 python 虛擬環境 `.venv`
+第二個是下載本地的前端依賴套件
+第三個是下載本地的後端依賴套件
 
 ## 前端啟動
 
@@ -39,7 +42,7 @@ npm run dev:frontend
 ```text
 http://localhost:5173/
 ```
-在遊覽器貼上網址並進入，隨後就會開啟前端網頁。
+在瀏覽器貼上網址並進入，隨後就會開啟前端網頁。
 
 ## 後端啟動
 

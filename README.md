@@ -13,7 +13,7 @@
   - 測試入口；目前包含後端 smoke tests，執行指令：`npm run test:backend`
 
 - [docs/README.md](./docs/README.md)
-  - 專案文件入口，包含專案總覽、模組說明與系統設計
+  - 專案文件入口，包含專案總覽、模組說明、系統設計與架構文件
 
 - [docs/quick_start.md](./docs/quick_start.md)
   - 專案環境快速啟動說明，包含前後端啟動與資料庫初始化指令

@@ -1,0 +1,11 @@
+{
+  "name": "conversational-task-planner",
+  "private": true,
+  "scripts": {
+    "install:frontend": "npm --prefix frontend install",
+    "install:backend": "python -m pip install -r backend/requirements.txt",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "cd backend && python -m uvicorn app.main:app --reload",
+    "init:backend": "cd backend && python -m app.db.init_db"
+  }
+}

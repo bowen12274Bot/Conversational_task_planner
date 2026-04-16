@@ -24,15 +24,15 @@
   - 快速啟動文件
   - 包含前端、後端與資料庫初始化的基本指令
 
-- [development_plan/mvp_plan_direction_a.md](./development_plan/mvp_plan_direction_a.md)
+- [development_plan/mvp_plan.md](./development_plan/mvp_plan.md)
   - MVP 開發規劃文件
-  - 包含方向 A 下的 MVP 目標、範圍與階段重點
+  - 包含目前 MVP 的目標、範圍與階段重點
 
 ## 建議閱讀順序
 
 1. `project_overview.md`
 2. `quick_start.md`
-3. `development_plan/mvp_plan_direction_a.md`
+3. `development_plan/mvp_plan.md`
 4. `architecture.md`
 5. `module_description.md`
 

@@ -11,6 +11,12 @@
 - [raw_request_api.md](./raw_request_api.md)
   - MVP 第一階段的原始需求輸入 API
 
+- [ai_structured_output_api.md](./ai_structured_output_api.md)
+  - AI 固定格式輸出 API
+
+- [ai_text_output_api.md](./ai_text_output_api.md)
+  - AI 文字結果輸出 API
+
 ---
 
 ## 命名規則

@@ -6,8 +6,9 @@
 
 ## 文件說明
 
-- [api_spec.md](./api_spec.md)
+- [api_spec/](./api_spec/README.md)
   - API 規格草稿
+  - 用於整理端點用途、request / response 與相關回應約定
 
 - [data_contract/](./data_contract/README.md)
   - 資料契約與概念資料模型

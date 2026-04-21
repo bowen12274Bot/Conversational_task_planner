@@ -1,6 +1,7 @@
 from app.schemas.architecture_contracts import (
     AIToModuleResult,
     ControllerFlowState,
+    FlowStageData,
     ControllerToFrontendResponse,
     ControllerToResponseData,
     ControllerTransferData,
@@ -18,6 +19,7 @@ __all__ = [
     "AIToModuleResult",
     "ContextEngineeringOutput",
     "ControllerFlowState",
+    "FlowStageData",
     "ControllerToFrontendResponse",
     "ControllerToResponseData",
     "ControllerTransferData",

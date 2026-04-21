@@ -2,7 +2,7 @@
 
 更新日期時間：2026-04-16 21:45:00
 
-> 本文件為 [system_design.md](./system_design.md) 的延伸，用於整理本專案目前的整體架構分層。
+> 本文件為 [system_design.md](./design/system_design.md) 的延伸，用於整理本專案目前的整體架構分層。
 
 ---
 

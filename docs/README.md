@@ -1,6 +1,6 @@
 # Docs README
 
-本資料夾用於整理專案的文件內容，依照文件用途區分為專案總覽、模組說明、架構設計、系統設計與開發規劃。
+本資料夾用於整理專案的文件內容，依照文件用途區分為專案總覽、模組說明、架構設計、系統設計、設計構想與開發規劃。
 
 ## 文件說明
 
@@ -11,10 +11,6 @@
 - [module_description.md](./module_description.md)
   - 系統模組說明文件
   - 包含 Context Engineering、Response、Questioning、Planning、Output Structuring 與 Persistence 等核心模組說明
-
-- [system_design.md](./system_design.md)
-  - 系統設計文件
-  - 包含平台形式、技術架構、技術選型、資料設計方向與 AI 串接設計
 
 - [architecture.md](./architecture.md)
   - 系統架構文件
@@ -27,6 +23,11 @@
 - [development_plan/](./development_plan/)
   - 團隊開發計畫規劃文件
   - 包含目前計畫的目標、範圍與階段重點
+
+- [design/](./design/README.md)
+  - 設計構想文件資料夾
+  - 包含設計方向、方案討論與尚未正式定案的設計文件
+  - 目前包含 AI 設計構想與系統設計文件
 
 - [specs/](./specs/)
   - 共用規格文件資料夾

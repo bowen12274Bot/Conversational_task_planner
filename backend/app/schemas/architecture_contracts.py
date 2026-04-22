@@ -30,19 +30,6 @@ class ControllerFlowState(BaseModel):
     next_step_target: str = Field(..., min_length=1)
 
 
-class FlowStageData(BaseModel):
-    """用於表示單一 `flow_stage` 節點在資料傳輸情境下所需內容的結構化資料物件。"""
-
-    # 系統內部穩定引用該節點的主要識別。
-    system_id: str = Field(..., min_length=1)
-    # 主要涉及的架構層或模組層處理單位。
-    processing_unit: str = Field(..., min_length=1)
-    # 目前節點的前一個節點或前一組節點。
-    previous: list[str] = Field(default_factory=list)
-    # 目前節點的下一個節點、下一組節點，或流程結束狀態。
-    next: list[str] = Field(default_factory=list)
-
-
 class ControllerTransferData(BaseModel):
     """由後端控制層整理並轉交給下一個模組或輸出路徑的資料，用於承接前一段流程結果並銜接後續處理。"""
 

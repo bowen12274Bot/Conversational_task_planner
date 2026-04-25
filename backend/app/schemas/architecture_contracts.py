@@ -57,6 +57,8 @@ class ModuleToAIRequest(BaseModel):
     task_type: str = Field(..., min_length=1)
     # 本次任務所屬的分組名稱。
     group_name: str = Field(..., min_length=1)
+    # 本次任務應採用的模型能力等級。
+    capability_level: str = Field(..., min_length=1)
     # 提供給 AI 任務的輸入資料。
     input_data: dict[str, Any] = Field(default_factory=dict)
     # 本次 AI 任務希望達成的輸出目標或參考模板。

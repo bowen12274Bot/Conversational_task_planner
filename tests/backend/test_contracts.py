@@ -52,8 +52,10 @@ def test_ai_task_request_contract_supports_grouped_ai_requests() -> None:
     request = ModuleToAIRequest(
         task_type="structured_output",
         group_name="questioning_decision",
+        capability_level="default",
         input_data={"user_input": "我想做一個期中報告規劃"},
         output_target="產出 Questioning 判斷結果",
     )
 
     assert request.group_name == "questioning_decision"
+    assert request.capability_level == "default"

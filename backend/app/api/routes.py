@@ -1,9 +1,12 @@
 from fastapi import APIRouter
 
-from app.schemas.architecture_contracts import (
+from app.schemas import (
+    AIToModuleResult,
     ControllerToFrontendResponse,
     FrontendToControllerRequest,
+    ModuleToAIRequest,
 )
+from app.services.ai_service.service import run_ai_flow
 
 router = APIRouter(prefix="/api")
 
@@ -22,8 +25,13 @@ def db_check() -> dict[str, str]:
 def raw_request(payload: FrontendToControllerRequest) -> ControllerToFrontendResponse:
     return ControllerToFrontendResponse(
         reply_text=(
-            "已收到需求。MVP1 目前先回傳控制層基本回應資料，後續再串接 "
+            "目前這是 MVP1 測試用回應。後續會由後端流程控制層串接 "
             "Context Engineering、Questioning 與 AI service layer。"
         ),
         structured_task_output=None,
     )
+
+
+@router.post("/ai-test", response_model=AIToModuleResult)
+def ai_test(payload: ModuleToAIRequest) -> AIToModuleResult:
+    return run_ai_flow(payload)

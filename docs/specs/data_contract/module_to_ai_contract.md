@@ -2,6 +2,8 @@
 
 本文件用於定義系統中各模組將 AI 任務交由 `AI service layer` 處理時的核心資料物件。
 
+目前模組進入 AI 流程時，主線是透過本契約將資料交給 `AI service layer`，不經由 `ai_text_output_api.md` 或 `ai_structured_output_api.md` 的 AI API 端點。
+
 ---
 
 ## 資料物件一：AI 任務請求資料

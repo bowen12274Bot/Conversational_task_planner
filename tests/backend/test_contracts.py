@@ -3,6 +3,11 @@ from app.schemas.architecture_contracts import (
     ControllerToFrontendResponse,
     FrontendToControllerRequest,
 )
+from app.schemas.ai_service_contracts import (
+    PromptBuilderOutput,
+    ProviderExecutionConfig,
+    ProviderRequestData,
+)
 from app.schemas.module_contracts import (
     QuestioningDecision,
     ResponseOutput,
@@ -59,3 +64,28 @@ def test_ai_task_request_contract_supports_grouped_ai_requests() -> None:
 
     assert request.group_name == "questioning_decision"
     assert request.capability_level == "default"
+
+
+def test_ai_service_internal_contracts_keep_expected_shapes() -> None:
+    prompt_output = PromptBuilderOutput(
+        prompt_text="test prompt",
+        request_payload={"contents": [{"parts": [{"text": "test prompt"}]}]},
+    )
+    execution_config = ProviderExecutionConfig(
+        provider_id="ai_studio",
+        base_url="https://example.com/models",
+        timeout_seconds=30,
+        api_key="secret-key",
+    )
+    provider_request = ProviderRequestData(
+        selected_model_config={
+            "id": "ai_studio_default",
+            "model_name": "gemma-3-12b-it",
+        },
+        request_payload=prompt_output.request_payload,
+        execution_config=execution_config,
+    )
+
+    assert prompt_output.prompt_text == "test prompt"
+    assert execution_config.provider_id == "ai_studio"
+    assert provider_request.execution_config.timeout_seconds == 30

@@ -1,6 +1,11 @@
 from typing import Any
 
-from app.schemas import AIToModuleResult, ModuleToAIRequest
+from app.schemas import (
+    AIToModuleResult,
+    ModuleToAIRequest,
+    ProviderExecutionConfig,
+    ProviderRequestData,
+)
 from app.services.ai_service.clients import run_ai_studio_task, run_openrouter_task
 from app.services.ai_service.config_loader import (
     get_provider_base_url,
@@ -103,48 +108,26 @@ def build_model_chain(
 
 
 def run_single_model(
-    request: ModuleToAIRequest,
-    ai_service_config: dict[str, Any],
-    model_config: dict[str, Any],
+    provider_request_data: ProviderRequestData,
 ) -> AIToModuleResult:
     """Dispatch one request to the provider defined by the selected model config."""
 
-    provider = model_config.get("provider")
+    provider = provider_request_data.execution_config.provider_id
     if provider == "ai_studio":
-        base_url = get_provider_base_url(
-            ai_service_config=ai_service_config,
-            provider_id="ai_studio",
-        )
-        timeout_seconds = get_provider_timeout_seconds(
-            ai_service_config=ai_service_config,
-            provider_id="ai_studio",
-        )
-        api_key = load_provider_api_key("ai_studio")
-        request_payload = build_ai_studio_request_payload(request)
         return run_ai_studio_task(
-            model_config=model_config,
-            request_payload=request_payload,
-            api_key=api_key,
-            base_url=base_url,
-            timeout_seconds=timeout_seconds,
+            model_config=provider_request_data.selected_model_config,
+            request_payload=provider_request_data.request_payload,
+            api_key=provider_request_data.execution_config.api_key,
+            base_url=provider_request_data.execution_config.base_url,
+            timeout_seconds=provider_request_data.execution_config.timeout_seconds,
         )
     if provider == "openrouter":
-        base_url = get_provider_base_url(
-            ai_service_config=ai_service_config,
-            provider_id="openrouter",
-        )
-        timeout_seconds = get_provider_timeout_seconds(
-            ai_service_config=ai_service_config,
-            provider_id="openrouter",
-        )
-        api_key = load_provider_api_key("openrouter")
-        request_payload = build_openrouter_request_payload(request)
         return run_openrouter_task(
-            model_config=model_config,
-            request_payload=request_payload,
-            api_key=api_key,
-            base_url=base_url,
-            timeout_seconds=timeout_seconds,
+            model_config=provider_request_data.selected_model_config,
+            request_payload=provider_request_data.request_payload,
+            api_key=provider_request_data.execution_config.api_key,
+            base_url=provider_request_data.execution_config.base_url,
+            timeout_seconds=provider_request_data.execution_config.timeout_seconds,
         )
 
     return AIToModuleResult(
@@ -180,10 +163,40 @@ def run_ai_flow(
     last_result: AIToModuleResult | None = None
 
     for current_model in model_chain:
+        provider_id = str(current_model.get("provider", "")).strip()
+        execution_config = ProviderExecutionConfig(
+            provider_id=provider_id,
+            base_url=get_provider_base_url(
+                ai_service_config=ai_service_config,
+                provider_id=provider_id,
+            ),
+            timeout_seconds=get_provider_timeout_seconds(
+                ai_service_config=ai_service_config,
+                provider_id=provider_id,
+            ),
+            api_key=load_provider_api_key(provider_id) or "",
+        )
+
+        if provider_id == "ai_studio":
+            prompt_output = build_ai_studio_request_payload(request)
+        elif provider_id == "openrouter":
+            prompt_output = build_openrouter_request_payload(request)
+        else:
+            last_result = AIToModuleResult(
+                success=False,
+                error_message=f"Unsupported provider '{provider_id}'.",
+                error_stage="ai_service_layer",
+            )
+            continue
+
+        provider_request_data = ProviderRequestData(
+            selected_model_config=current_model,
+            request_payload=prompt_output.request_payload,
+            execution_config=execution_config,
+        )
+
         last_result = run_single_model(
-            request=request,
-            ai_service_config=ai_service_config,
-            model_config=current_model,
+            provider_request_data=provider_request_data,
         )
         if last_result.success:
             return last_result

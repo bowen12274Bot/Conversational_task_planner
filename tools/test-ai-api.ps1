@@ -4,7 +4,7 @@ param(
     [string]$GroupName = "questioning_response",
     [string]$CapabilityLevel = "default",
     [string]$UserInput = "測試API連接，請只輸出成功兩字",
-    [string]$OutputTarget = "只輸出成功"
+    [string]$OutputTarget = "成功"
 )
 
 $projectRoot = Split-Path -Parent $PSScriptRoot

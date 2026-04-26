@@ -1,3 +1,8 @@
+from app.schemas.ai_service_contracts import (
+    PromptBuilderOutput,
+    ProviderExecutionConfig,
+    ProviderRequestData,
+)
 from app.schemas.architecture_contracts import (
     AIToModuleResult,
     ControllerFlowState,
@@ -31,6 +36,9 @@ __all__ = [
     "FlowStageData",
     "FlowStageExecutionState",
     "ModuleToAIRequest",
+    "PromptBuilderOutput",
+    "ProviderExecutionConfig",
+    "ProviderRequestData",
     "QuestioningDecision",
     "RequirementInput",
     "ResponseOutput",

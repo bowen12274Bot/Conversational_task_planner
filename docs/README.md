@@ -8,17 +8,21 @@
   - 專案總覽文件
   - 包含專案背景、問題定義、專案目標、主要使用情境與預期成果
 
-- [module_description.md](./module_description.md)
-  - 系統模組說明文件
-  - 包含 Context Engineering、Response、Questioning、Planning、Output Structuring 與 Persistence 等核心模組說明
-
 - [architecture.md](./architecture.md)
   - 系統架構文件
   - 包含專案目前的整體架構分層、各層角色與層間互動流程
 
+- [module_description.md](./module_description.md)
+  - 系統模組說明文件
+  - 包含 Context Engineering、Response、Questioning、Planning、Output Structuring 與 Persistence 等核心模組說明
+
 - [quick_start.md](./quick_start.md)
   - 快速啟動文件
   - 包含前端、後端與資料庫初始化的基本指令
+
+- [ai_usage_guide.md](./ai_usage_guide.md)
+  - AI 使用說明文件
+  - 包含 AI Provider、API key 建立、本機環境設定與 AI 接通測試方式
 
 - [development_plan/](./development_plan/)
   - 團隊開發計畫規劃文件
@@ -33,13 +37,22 @@
   - 共用規格文件資料夾
   - 包含 API 規格、資料契約、畫面需求與資料實體草稿等正式規格
 
+- [images/](./images/)
+  - 文件圖片資源資料夾
+  - 用於存放教學文件、規格文件與其他說明文件使用的截圖或圖片
+
+- [UML/](./UML/)
+  - UML 圖與流程圖資料夾
+  - 用於整理系統結構、流程與模組關係的圖示文件
+
 ## 閱讀順序
 
 若想深入了解專案可以按照此順序閱讀。
 
 1. `project_overview.md`
 2. `quick_start.md`
-3. `architecture.md`
-4. `module_description.md`
-5. `specs/`
-6. `development_plan.md`
+3. `ai_usage_guide.md`
+4. `architecture.md`
+5. `module_description.md`
+6. `specs/`
+7. `development_plan.md`

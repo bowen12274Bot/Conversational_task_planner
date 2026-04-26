@@ -1,6 +1,6 @@
 import json
 
-from app.schemas import ModuleToAIRequest
+from app.schemas import ModuleToAIRequest, PromptBuilderOutput
 
 
 def build_text_prompt(request: ModuleToAIRequest) -> str:
@@ -17,30 +17,40 @@ def build_text_prompt(request: ModuleToAIRequest) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def build_ai_studio_request_payload(request: ModuleToAIRequest) -> dict[str, object]:
-    """Build AI Studio request payload from the normalized module request."""
+def build_ai_studio_request_payload(request: ModuleToAIRequest) -> PromptBuilderOutput:
+    """Build AI Studio prompt output from the normalized module request."""
 
-    return {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": build_text_prompt(request),
-                    }
-                ]
-            }
-        ]
-    }
+    prompt_text = build_text_prompt(request)
+
+    return PromptBuilderOutput(
+        prompt_text=prompt_text,
+        request_payload={
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": prompt_text,
+                        }
+                    ]
+                }
+            ]
+        },
+    )
 
 
-def build_openrouter_request_payload(request: ModuleToAIRequest) -> dict[str, object]:
-    """Build OpenRouter chat completion payload from the normalized module request."""
+def build_openrouter_request_payload(request: ModuleToAIRequest) -> PromptBuilderOutput:
+    """Build OpenRouter prompt output from the normalized module request."""
 
-    return {
-        "messages": [
-            {
-                "role": "user",
-                "content": build_text_prompt(request),
-            }
-        ]
-    }
+    prompt_text = build_text_prompt(request)
+
+    return PromptBuilderOutput(
+        prompt_text=prompt_text,
+        request_payload={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt_text,
+                }
+            ]
+        },
+    )

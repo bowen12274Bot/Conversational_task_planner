@@ -1,6 +1,6 @@
 # 規格文件說明
 
-更新日期時間：2026-04-20 00:55:00
+更新日期時間：2026-04-26 13:23:00
 
 本資料夾用於整理系統規格文件，內容以可被開發直接引用的正式規格為主。
 
@@ -13,6 +13,10 @@
 - [data_contract/](./data_contract/README.md)
   - 資料契約與概念資料模型
   - 用於整理資料物件定義、資料關係與流程契約
+
+- [ai_service_architecture.md](./ai_service_architecture.md)
+  - AI 服務層架構規範
+  - 用於整理 AI service layer 的架構定位、分工、核心功能、Provider 與模型使用方式
 
 - [data_entities_draft.md](./data_entities_draft.md)
   - 資料實體草稿

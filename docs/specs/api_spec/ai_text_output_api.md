@@ -1,16 +1,20 @@
 # AI 文字結果輸出 API 規格
 
+本文件定義未來若需提供文字型 AI HTTP 介面時的端點規格。
+
+目前模組進入 AI 流程時，主線是透過 `module_to_ai_contract.md` 與 `AI service layer` 直接互動，不經由 AI API 端點呼叫。
+
 ## 文件名稱
 
 - `ai_text_output_api`
 
-## API 端點
+## 預定 API 端點
 
 - 內部串接規格，端點形式待後續實作時定義
 
 ## API 目的
 
-- 提供內部模組經由 `AI service layer` 呼叫外部 AI
+- 提供未來對外文字型 AI HTTP 介面之規格依據
 - 根據既有分析結果生成最終文字內容
 - 供文字輸出相關流程承接
 

@@ -11,7 +11,7 @@
 
 - `conversation_id`
   - 對話主體的唯一識別值。
-  - 由 `Persistence Module` 建立新對話時生成。
+  - 由 `Persistence Layer` 建立新對話時生成。
   - 提供前端後續呼叫 `raw_request` 與歷史紀錄 API 使用。
 
 - `created_at`

@@ -11,7 +11,7 @@
 ## API 目的
 
 - 提供前端於初始化時建立新的 `conversation`
-- 讓後端控制層呼叫 `Persistence Module` 生成新的 `conversation_id`
+- 讓後端控制層呼叫 `Persistence Layer` 生成新的 `conversation_id`
 - 回傳可供後續 `raw_request` 與歷史紀錄查詢使用的對話識別值
 
 ## 輸入內容
@@ -21,7 +21,7 @@
 ## 成功條件
 
 - 後端成功建立新的 `conversation`
-- `Persistence Module` 成功生成並保存新的 `conversation_id`
+- `Persistence Layer` 成功生成並保存新的 `conversation_id`
 
 ## 回應訊息
 
@@ -57,4 +57,4 @@
   - 本次錯誤的簡短描述。
 
 - `error_stage`
-  - 錯誤發生的處理位置，例如控制層、`Persistence Module` 或資料保存階段。
+  - 錯誤發生的處理位置，例如控制層、`Persistence Layer` 或資料保存階段。

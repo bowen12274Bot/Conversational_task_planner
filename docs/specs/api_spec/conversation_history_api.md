@@ -12,7 +12,7 @@
 
 - 提供前端於初始化或頁面刷新後讀取既有對話歷史紀錄
 - 讓前端可依回傳結果重建本地 message cache
-- 作為控制層向 `Persistence Module` 取得歷史資料後，回傳前端的外部查詢接口
+- 作為控制層向 `Persistence Layer` 取得歷史資料後，回傳前端的外部查詢接口
 
 ## 輸入內容
 
@@ -73,7 +73,7 @@
   - 本次錯誤的簡短描述。
 
 - `error_stage`
-  - 錯誤發生的處理位置，例如控制層、`Persistence Module` 或回應整理階段。
+  - 錯誤發生的處理位置，例如控制層、`Persistence Layer` 或回應整理階段。
 
 - `turn`
   - 指一次互動回合，作為同一組 user / assistant / system 訊息的保存單位。

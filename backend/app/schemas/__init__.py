@@ -9,8 +9,6 @@ from app.schemas.conversation_contracts import (
     ConversationHistoryResponse,
     ConversationMessage,
     ConversationTurn,
-    RawRequestPayload,
-    RawRequestResponse,
 )
 from app.schemas.architecture_contracts import (
     AIToModuleResult,
@@ -54,8 +52,6 @@ __all__ = [
     "ProviderExecutionConfig",
     "ProviderRequestData",
     "QuestioningDecision",
-    "RawRequestPayload",
-    "RawRequestResponse",
     "RequirementInput",
     "ResponseOutput",
 ]

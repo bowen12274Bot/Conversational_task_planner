@@ -37,6 +37,23 @@
 - 成功時，回傳成功狀態、對應的 `conversation_id` 與輸出模組的最終輸出結果
 - 失敗時，回傳錯誤狀態與最小錯誤資訊
 
+## 最小成功回應資料
+
+- `reply_text`
+- `conversation_id`
+- `structured_task_output`
+
+其中：
+
+- `reply_text`
+  - 指本輪互動完成後，提供前端直接顯示的回覆文字。
+
+- `conversation_id`
+  - 指本輪互動所屬的既有對話識別值。
+
+- `structured_task_output`
+  - 指本輪互動若已有可供前端顯示的結構化任務資料，則由控制層一併回傳；若目前無可回傳資料，可為空值。
+
 ## 狀態碼
 
 | 狀態碼 | 名稱 | 說明 |

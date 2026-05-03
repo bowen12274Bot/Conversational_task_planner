@@ -1,17 +1,17 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from app.controllers.raw_request_controller import RawRequestController
 from app.schemas import (
     AIToModuleResult,
     ConversationCreateResponse,
     ConversationHistoryResponse,
+    ControllerToFrontendResponse,
     FrontendToControllerRequest,
     ModuleToAIRequest,
-    RawRequestPayload,
-    RawRequestResponse,
 )
 from app.services.ai_service.service import run_ai_flow
 
@@ -52,7 +52,7 @@ def db_check() -> dict[str, str]:
 
 
 @router.post("/conversations", response_model=ConversationCreateResponse)
-def create_conversation() -> ConversationCreateResponse:
+def create_conversation() -> Any:
     """建立新的對話，由後端生成並回傳 conversation_id。
 
     成功：200 OK，回傳 conversation_id。
@@ -79,8 +79,8 @@ def create_conversation() -> ConversationCreateResponse:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/raw-request", response_model=RawRequestResponse)
-def raw_request(payload: RawRequestPayload) -> Any:
+@router.post("/raw-request", response_model=ControllerToFrontendResponse)
+def raw_request(payload: FrontendToControllerRequest) -> Any:
     """承接前端送出的對話輸入，啟動後端主流程並回傳結果。
 
     成功：200 OK，回傳 reply_text、conversation_id 與 structured_task_output。
@@ -111,16 +111,8 @@ def raw_request(payload: RawRequestPayload) -> Any:
 
     # --- 主流程（MVP2 暫以固定回應代替；後續串接控制層流程）---
     try:
-        reply_text = (
-            "目前這是 MVP2 測試用回應。後續會由後端流程控制層串接 "
-            "Context Engineering、Questioning 與 AI service layer，"
-            f"並將本輪對話紀錄保存至 Persistence Layer（conversation_id: {payload.conversation_id}）。"
-        )
-        return RawRequestResponse(
-            reply_text=reply_text,
-            conversation_id=payload.conversation_id,
-            structured_task_output=None,
-        )
+        controller = RawRequestController()
+        return controller.handle_raw_request(payload)
     except Exception as exc:
         return _error_response(
             status_code=500,

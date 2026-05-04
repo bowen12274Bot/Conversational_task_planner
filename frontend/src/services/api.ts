@@ -14,6 +14,33 @@ type ControllerToFrontendResponse = {
   structured_task_output?: Record<string, any> | null
 }
 
+type CreateConversationResponse = {
+  conversation_id: string
+}
+
+type ConversationHistoryResponse = {
+  messages: Array<{
+    id: string
+    type: 'system' | 'user' | 'ai'
+    content: string
+    timestamp: string
+  }>
+  plan_tasks?: Array<{
+    id: string
+    title: string
+    due?: string
+    created_at: string
+    subtasks: Array<{
+      id: string
+      title: string
+      description?: string
+      priority: number
+      estimated_time?: string
+      completed: boolean
+    }>
+  }>
+}
+
 export async function getPingMessage(): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/ping`)
 
@@ -44,4 +71,30 @@ export async function sendUserRequest(userInput: string): Promise<ControllerToFr
   }
 
   return (await response.json()) as ControllerToFrontendResponse
+}
+
+export async function createConversation(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  const data = (await response.json()) as CreateConversationResponse
+  return data.conversation_id
+}
+
+export async function getConversationHistory(conversationId: string): Promise<ConversationHistoryResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}/history`)
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  return (await response.json()) as ConversationHistoryResponse
 }

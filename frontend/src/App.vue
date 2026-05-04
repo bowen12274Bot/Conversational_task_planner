@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { sendUserRequest } from './services/api'
+import { ref, onMounted } from 'vue'
+import { sendUserRequest, createConversation, getConversationHistory } from './services/api'
 
 type Message = {
   id: number
@@ -33,35 +33,154 @@ const userInput = ref('')
 const isLoading = ref(false)
 const planTasks = ref<PlanTask[]>([])
 
+// MVP Phase 2: 对话缓存和历史加载
+const conversationId = ref<string | null>(null)
+const isInitializing = ref(true)
+
+// 缓存键名
+const CONVERSATION_CACHE_KEY = 'conversation_cache'
+const CONVERSATION_ID_KEY = 'conversation_id'
+
+// 对话缓存接口
+interface ConversationCache {
+  messages: Message[]
+  planTasks: PlanTask[]
+  lastUpdated: string
+}
+
+// 缓存管理函数
+const saveConversationCache = () => {
+  const cache: ConversationCache = {
+    messages: messages.value,
+    planTasks: planTasks.value,
+    lastUpdated: new Date().toISOString()
+  }
+  localStorage.setItem(CONVERSATION_CACHE_KEY, JSON.stringify(cache))
+  if (conversationId.value) {
+    localStorage.setItem(CONVERSATION_ID_KEY, conversationId.value)
+  }
+}
+
+const loadConversationCache = (): ConversationCache | null => {
+  const cacheStr = localStorage.getItem(CONVERSATION_CACHE_KEY)
+  const conversationIdStr = localStorage.getItem(CONVERSATION_ID_KEY)
+
+  if (cacheStr && conversationIdStr) {
+    try {
+      const cache = JSON.parse(cacheStr) as ConversationCache
+      conversationId.value = conversationIdStr
+      return cache
+    } catch (error) {
+      console.error('Failed to parse conversation cache:', error)
+      clearConversationCache()
+    }
+  }
+  return null
+}
+
+const clearConversationCache = () => {
+  localStorage.removeItem(CONVERSATION_CACHE_KEY)
+  localStorage.removeItem(CONVERSATION_ID_KEY)
+  conversationId.value = null
+}
+
+// 初始化对话
+const initializeConversation = async () => {
+  try {
+    // 尝试从缓存加载
+    const cache = loadConversationCache()
+    if (cache) {
+      // 如果有缓存，尝试从服务器加载最新历史
+      if (conversationId.value) {
+        try {
+          const history = await getConversationHistory(conversationId.value)
+          // 使用服务器的历史数据重建界面
+          messages.value = history.messages.map(msg => ({
+            id: parseInt(msg.id),
+            type: msg.type,
+            content: msg.content
+          }))
+
+          if (history.plan_tasks) {
+            planTasks.value = history.plan_tasks.map(task => ({
+              id: task.id,
+              title: task.title,
+              due: task.due,
+              createdAt: new Date(task.created_at),
+              subtasks: task.subtasks.map(sub => ({
+                id: sub.id,
+                title: sub.title,
+                description: sub.description,
+                priority: sub.priority,
+                estimatedTime: sub.estimated_time,
+                completed: sub.completed
+              }))
+            }))
+          }
+        } catch (error) {
+          console.warn('Failed to load conversation history, using cache:', error)
+          // 如果服务器加载失败，使用缓存数据
+          messages.value = cache.messages
+          planTasks.value = cache.planTasks
+        }
+      }
+    } else {
+      // 没有缓存，创建新对话
+      conversationId.value = await createConversation()
+      saveConversationCache()
+    }
+  } catch (error) {
+    console.error('Failed to initialize conversation:', error)
+    // 创建新对话作为后备
+    try {
+      conversationId.value = await createConversation()
+      saveConversationCache()
+    } catch (fallbackError) {
+      console.error('Failed to create fallback conversation:', fallbackError)
+    }
+  } finally {
+    isInitializing.value = false
+  }
+}
+
 const sendMessage = async () => {
   if (!userInput.value.trim() || isLoading.value) return
 
   const inputText = userInput.value.trim()
   userInput.value = ''
 
-  messages.value.push({
+  const userMessage: Message = {
     id: Date.now(),
     type: 'user',
     content: inputText
-  })
+  }
+
+  messages.value.push(userMessage)
+  saveConversationCache() // 立即保存缓存
 
   // 先生成任務與子任務，再呼叫後端API顯示AI回應
   parseAndAddPlan(inputText)
+  saveConversationCache() // 保存任务更新
+
   isLoading.value = true
 
   try {
     const response = await sendUserRequest(inputText)
-    messages.value.push({
+    const aiMessage: Message = {
       id: Date.now() + 1,
       type: 'ai',
       content: response.reply_text
-    })
+    }
+    messages.value.push(aiMessage)
+    saveConversationCache() // 保存AI回复
   } catch (error) {
-    messages.value.push({
+    const errorMessage: Message = {
       id: Date.now() + 1,
       type: 'ai',
       content: `抱歉，發生錯誤：${error instanceof Error ? error.message : '未知錯誤'}`
-    })
+    }
+    messages.value.push(errorMessage)
+    saveConversationCache() // 保存错误消息
   } finally {
     isLoading.value = false
   }
@@ -182,15 +301,24 @@ const toggleSubtaskCompletion = (planId: string, subtaskId: string) => {
   const subtask = plan?.subtasks.find(s => s.id === subtaskId)
   if (subtask) {
     subtask.completed = !subtask.completed
+    saveConversationCache() // 保存任务状态变更
   }
 }
+
+// 组件挂载时初始化对话
+onMounted(async () => {
+  await initializeConversation()
+})
 </script>
 
 <template>
   <div class="app-container">
     <!-- 左側聊天區 -->
     <div class="chat-section">
-      <div class="chat-messages">
+      <div v-if="isInitializing" class="initializing-state">
+        <p>正在初始化對話...</p>
+      </div>
+      <div v-else class="chat-messages">
         <div v-for="message in messages" :key="message.id" :class="['message', message.type]">
           {{ message.content }}
         </div>
@@ -202,11 +330,11 @@ const toggleSubtaskCompletion = (planId: string, subtaskId: string) => {
         <input
           v-model="userInput"
           @keyup.enter="sendMessage"
-          :disabled="isLoading"
+          :disabled="isLoading || isInitializing"
           placeholder="輸入您的目標或問題..."
           type="text"
         />
-        <button @click="sendMessage" :disabled="isLoading || !userInput.trim()">
+        <button @click="sendMessage" :disabled="isLoading || isInitializing || !userInput.trim()">
           {{ isLoading ? '處理中...' : '送出' }}
         </button>
       </div>

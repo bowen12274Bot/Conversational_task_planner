@@ -8,6 +8,8 @@ from app.schemas.conversation_contracts import (
     ConversationHistoryRequest,
     ConversationHistoryResponse,
     ConversationMessage,
+    ConversationRecordStoreRequest,
+    ConversationRecordStoreResult,
     ConversationTurn,
 )
 from app.schemas.architecture_contracts import (
@@ -43,6 +45,8 @@ __all__ = [
     "ConversationHistoryRequest",
     "ConversationHistoryResponse",
     "ConversationMessage",
+    "ConversationRecordStoreRequest",
+    "ConversationRecordStoreResult",
     "ConversationTurn",
     "ErrorResponse",
     "FrontendToControllerRequest",

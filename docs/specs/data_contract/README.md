@@ -1,6 +1,6 @@
 # 資料契約說明
 
-更新日期時間：2026-05-01 13:54:00
+更新日期時間：2026-05-04 10:37:00
 
 本資料夾用於整理系統中的資料契約文件，重點在於描述架構層與模組層之間交換的資料內容。
 
@@ -21,8 +21,7 @@
   - [module_to_ai_contract.md](./module_to_ai_contract.md)
 
 - 持久化相關資料契約
-  - [persistence_conversation_record_store_contract.md](./persistence_conversation_record_store_contract.md)
-  - [persistence_conversation_record_history_contract.md](./persistence_conversation_record_history_contract.md)
+  - [conversation_contract.md](./conversation_contract.md)
 
 - 共用參考文件
   - [flow_stage_reference.md](./flow_stage_reference.md)

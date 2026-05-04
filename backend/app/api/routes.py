@@ -7,9 +7,10 @@ from fastapi.responses import JSONResponse
 from app.controllers.raw_request_controller import RawRequestController
 from app.schemas import (
     AIToModuleResult,
-    ConversationCreateResponse,
+    CreateConversationResponse,
     ConversationHistoryResponse,
     ControllerToFrontendResponse,
+    ErrorResponse,
     FrontendToControllerRequest,
     ModuleToAIRequest,
 )
@@ -25,9 +26,13 @@ router = APIRouter(prefix="/api")
 
 def _error_response(status_code: int, error_message: str, error_stage: str) -> JSONResponse:
     """建立符合 API 規格的最小錯誤回應。"""
+    error = ErrorResponse(
+        error_message=error_message,
+        error_stage=error_stage,
+    )
     return JSONResponse(
         status_code=status_code,
-        content={"error_message": error_message, "error_stage": error_stage},
+        content=error.model_dump(),
     )
 
 
@@ -51,7 +56,10 @@ def db_check() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/conversations", response_model=ConversationCreateResponse)
+@router.post(
+    "/conversations",
+    response_model=CreateConversationResponse,
+)
 def create_conversation() -> Any:
     """建立新的對話，由後端生成並回傳 conversation_id。
 
@@ -65,7 +73,7 @@ def create_conversation() -> Any:
     """
     try:
         conversation_id = str(uuid.uuid4())
-        return ConversationCreateResponse(conversation_id=conversation_id)
+        return CreateConversationResponse(conversation_id=conversation_id)
     except Exception as exc:
         return _error_response(
             status_code=500,

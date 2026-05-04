@@ -25,6 +25,15 @@ class ControllerToFrontendResponse(BaseModel):
     structured_task_output: dict[str, Any] | None = None
 
 
+class ErrorResponse(BaseModel):
+    """跨層或跨模組流程中共用的最小錯誤回應資料。"""
+
+    # 本次錯誤的簡短描述。
+    error_message: str = Field(..., min_length=1)
+    # 錯誤發生的處理位置。
+    error_stage: str = Field(..., min_length=1)
+
+
 class ControllerFlowState(BaseModel):
     """由後端控制層依據固定流程程式邏輯所產生的目前流程位置資料，用於表達系統目前位於哪一個流程階段，以及下一步應進入哪一段處理。"""
 

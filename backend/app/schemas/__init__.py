@@ -3,12 +3,22 @@ from app.schemas.ai_service_contracts import (
     ProviderExecutionConfig,
     ProviderRequestData,
 )
+from app.schemas.conversation_contracts import (
+    CreateConversationResponse,
+    ConversationHistoryRequest,
+    ConversationHistoryResponse,
+    ConversationMessage,
+    ConversationRecordStoreRequest,
+    ConversationRecordStoreResult,
+    ConversationTurn,
+)
 from app.schemas.architecture_contracts import (
     AIToModuleResult,
     ControllerFlowState,
     ControllerToFrontendResponse,
     ControllerToResponseData,
     ControllerTransferData,
+    ErrorResponse,
     FrontendToControllerRequest,
     ModuleToAIRequest,
 )
@@ -31,6 +41,14 @@ __all__ = [
     "ControllerToFrontendResponse",
     "ControllerToResponseData",
     "ControllerTransferData",
+    "CreateConversationResponse",
+    "ConversationHistoryRequest",
+    "ConversationHistoryResponse",
+    "ConversationMessage",
+    "ConversationRecordStoreRequest",
+    "ConversationRecordStoreResult",
+    "ConversationTurn",
+    "ErrorResponse",
     "FrontendToControllerRequest",
     "FlowRunState",
     "FlowStageData",

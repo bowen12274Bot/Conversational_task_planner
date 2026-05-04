@@ -8,6 +8,8 @@ class FrontendToControllerRequest(BaseModel):
 
     # 使用者原始輸入內容。
     user_input: str = Field(..., min_length=1)
+    # 本次請求所屬的既有對話識別值。
+    conversation_id: str | None = Field(default=None, min_length=1)
     # 本次互動的基本資訊，先維持彈性結構。
     interaction_info: dict[str, Any] = Field(default_factory=dict)
 
@@ -17,8 +19,19 @@ class ControllerToFrontendResponse(BaseModel):
 
     # 顯示給使用者的回覆文字。
     reply_text: str = Field(..., min_length=1)
+    # 本輪互動所屬的對話識別值。
+    conversation_id: str | None = Field(default=None, min_length=1)
     # 已完成整理、可提供前端顯示的任務排版資料。
     structured_task_output: dict[str, Any] | None = None
+
+
+class ErrorResponse(BaseModel):
+    """跨層或跨模組流程中共用的最小錯誤回應資料。"""
+
+    # 本次錯誤的簡短描述。
+    error_message: str = Field(..., min_length=1)
+    # 錯誤發生的處理位置。
+    error_stage: str = Field(..., min_length=1)
 
 
 class ControllerFlowState(BaseModel):

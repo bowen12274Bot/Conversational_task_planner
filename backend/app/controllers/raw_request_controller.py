@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 
 from app.schemas import (
-    FrontendToControllerRequest,
     ControllerToFrontendResponse,
+    ConversationRecordStoreRequest,
+    FrontendToControllerRequest,
 )
+from app.services.persistence import store_conversation_record
 
 
 RAW_REQUEST_START_STAGE = "F001"
@@ -15,6 +17,7 @@ class RawRequestFlowContext:
     """`raw_request` 主流程在控制層內部使用的最小執行上下文。"""
 
     request: FrontendToControllerRequest
+    turn_id: str | None = None
     current_stage: str = RAW_REQUEST_START_STAGE
     traversed_history: list[str] = field(
         default_factory=lambda: [RAW_REQUEST_START_STAGE]
@@ -58,6 +61,18 @@ class RawRequestController:
         self._transition(context, next_stage="F002")
 
     def _run_stage_f002(self, context: RawRequestFlowContext) -> None:
+        if context.request.conversation_id is None:
+            raise ValueError("raw_request 流程缺少 conversation_id。")
+
+        store_result = store_conversation_record(
+            ConversationRecordStoreRequest(
+                conversation_id=context.request.conversation_id,
+                turn_id=None,
+                type="user",
+                content=context.request.user_input,
+            )
+        )
+        context.turn_id = store_result.turn_id
         self._transition(context, next_stage="F003")
 
     def _run_stage_f003(self, context: RawRequestFlowContext) -> None:
@@ -81,6 +96,7 @@ class RawRequestController:
                 "目前 raw_request 控制層流程骨架已建立，"
                 "後續會再接上實際模組與持久化處理。"
             ),
+            conversation_id=context.request.conversation_id,
             structured_task_output=None,
         )
 
@@ -97,6 +113,7 @@ class RawRequestController:
                 "目前 raw_request 規劃分支流程骨架已預留，"
                 "但尚未接入實際規劃與輸出模組。"
             ),
+            conversation_id=context.request.conversation_id,
             structured_task_output=None,
         )
 

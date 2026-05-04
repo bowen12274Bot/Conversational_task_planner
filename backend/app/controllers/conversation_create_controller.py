@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from app.services.persistence import create_conversation
+
 
 CONVERSATION_CREATE_START_STAGE = "F013"
 CONVERSATION_CREATE_ALLOWED_END_STAGES = {"F014"}
@@ -48,9 +50,7 @@ class ConversationCreateController:
         self,
         context: ConversationCreateFlowContext,
     ) -> dict[str, str]:
-        return {
-            "conversation_id": "conversation_id_placeholder",
-        }
+        return create_conversation().model_dump()
 
     def _transition(
         self,

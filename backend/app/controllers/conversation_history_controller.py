@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
 
+from app.schemas import ConversationHistoryRequest
+from app.services.persistence import get_conversation_history
+
 
 CONVERSATION_HISTORY_START_STAGE = "F015"
 CONVERSATION_HISTORY_ALLOWED_END_STAGES = {"F018"}
@@ -57,9 +60,11 @@ class ConversationHistoryController:
         self,
         context: ConversationHistoryFlowContext,
     ) -> dict[str, object]:
-        return {
-            "conversation_id": context.conversation_id,
-        }
+        return get_conversation_history(
+            ConversationHistoryRequest(
+                conversation_id=context.conversation_id,
+            )
+        ).model_dump()
 
     def _transition(
         self,

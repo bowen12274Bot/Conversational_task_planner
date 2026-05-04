@@ -1,9 +1,14 @@
-import uuid
 from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from app.controllers.conversation_create_controller import (
+    ConversationCreateController,
+)
+from app.controllers.conversation_history_controller import (
+    ConversationHistoryController,
+)
 from app.controllers.raw_request_controller import RawRequestController
 from app.schemas import (
     AIToModuleResult,
@@ -65,15 +70,10 @@ def create_conversation() -> Any:
 
     成功：200 OK，回傳 conversation_id。
     失敗：500 Internal Server Error，回傳 error_message 與 error_stage。
-
-    Notes
-    -----
-    目前 Persistence Layer 尚未串接，conversation_id 暫由後端以 UUID4 生成。
-    後續串接 Persistence Layer 後，應改由 Persistence Layer 負責生成與保存。
     """
     try:
-        conversation_id = str(uuid.uuid4())
-        return CreateConversationResponse(conversation_id=conversation_id)
+        controller = ConversationCreateController()
+        return controller.handle_create_conversation()
     except Exception as exc:
         return _error_response(
             status_code=500,
@@ -96,11 +96,6 @@ def raw_request(payload: FrontendToControllerRequest) -> Any:
       - 400 Bad Request：缺少必要欄位或格式不正確。
       - 404 Not Found：conversation_id 查無對應對話。
       - 500 Internal Server Error：主流程處理失敗。
-
-    Notes
-    -----
-    目前 conversation_id 驗證與 Persistence Layer 尚未串接，
-    後續應在此處驗證 conversation_id 是否存在，以及將對話紀錄送入 Persistence Layer。
     """
     # --- 基本輸入驗證 ---
     if not payload.conversation_id or not payload.conversation_id.strip():
@@ -146,11 +141,6 @@ def get_conversation_history(conversation_id: str) -> Any:
       - 400 Bad Request：conversation_id 格式不正確。
       - 404 Not Found：指定對話不存在。
       - 500 Internal Server Error：查詢或整理資料時發生錯誤。
-
-    Notes
-    -----
-    目前 Persistence Layer 尚未串接，暫以空 turns 列表回應代替。
-    後續串接 Persistence Layer 後，應向 Persistence Layer 查詢並整理歷史資料。
     """
     # --- 基本格式驗證 ---
     if not conversation_id or not conversation_id.strip():
@@ -160,14 +150,10 @@ def get_conversation_history(conversation_id: str) -> Any:
             error_stage="controller",
         )
 
-    # --- 查詢歷史（MVP2 暫以空 turns 代替；後續串接 Persistence Layer）---
+    # --- 查詢歷史 ---
     try:
-        # TODO: 串接 Persistence Layer 以取得真實歷史資料。
-        #       若 conversation_id 不存在，應回傳 404。
-        return ConversationHistoryResponse(
-            conversation_id=conversation_id,
-            turns=[],
-        )
+        controller = ConversationHistoryController()
+        return controller.handle_conversation_history(conversation_id)
     except Exception as exc:
         return _error_response(
             status_code=500,

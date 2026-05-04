@@ -9,6 +9,8 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "cd backend && ..\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload",
     "init:backend": "cd backend && ..\\.venv\\Scripts\\python.exe -m app.db.init_db",
+    "init:database": "cd backend && ..\\.venv\\Scripts\\python.exe -m app.db.init_db",
+    "reset:database": "powershell -NoProfile -Command \"if (Test-Path .\\data\\app.db) { Remove-Item .\\data\\app.db -Force }; Set-Location .\\backend; ..\\.venv\\Scripts\\python.exe -m app.db.init_db\"",
     "test:backend": ".\\.venv\\Scripts\\python.exe -m pytest tests/backend"
   }
 }

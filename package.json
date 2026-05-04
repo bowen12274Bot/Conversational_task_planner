@@ -1,0 +1,14 @@
+{
+  "name": "conversational-task-planner",
+  "private": true,
+  "scripts": {
+    "venv:create": "python -m venv .venv",
+    "init:private": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\init-private.ps1",
+    "install:frontend": "npm --prefix frontend install",
+    "install:backend": ".\\.venv\\Scripts\\python.exe -m pip install -r backend/requirements.txt",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "cd backend && ..\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload",
+    "init:backend": "cd backend && ..\\.venv\\Scripts\\python.exe -m app.db.init_db",
+    "test:backend": ".\\.venv\\Scripts\\python.exe -m pytest tests/backend"
+  }
+}

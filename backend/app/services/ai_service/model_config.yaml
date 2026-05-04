@@ -1,0 +1,41 @@
+providers:
+  - id: ai_studio
+    type: ai_studio
+    enabled: true
+    base_url: https://generativelanguage.googleapis.com/v1beta/models
+    timeout_seconds: 30
+
+  - id: openrouter
+    type: openrouter
+    enabled: true
+    base_url: https://openrouter.ai/api/v1
+    timeout_seconds: 30
+
+models:
+  - id: ai_studio_default
+    provider: ai_studio
+    model_name: gemma-3-12b-it
+    enabled: true
+    capability_level: default
+    fallback_to: openrouter_default
+
+  - id: ai_studio_strong
+    provider: ai_studio
+    model_name: gemma-4-26b-a4b-it
+    enabled: true
+    capability_level: strong
+    fallback_to: openrouter_strong
+
+  - id: openrouter_default
+    provider: openrouter
+    model_name: google/gemma-3-12b-it
+    enabled: true
+    capability_level: default
+    fallback_to: null
+
+  - id: openrouter_strong
+    provider: openrouter
+    model_name: google/gemma-4-26b-a4b-it
+    enabled: true
+    capability_level: strong
+    fallback_to: null

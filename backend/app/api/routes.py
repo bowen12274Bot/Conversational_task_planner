@@ -2,9 +2,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
 import uuid
 
 from app.schemas import (
@@ -40,27 +37,6 @@ class ConversationHistoryResponse(BaseModel):
 
 # MVP Phase 2: In-memory conversation storage (for testing)
 conversations = {}  # conversation_id -> {messages: [], plan_tasks: []}
-
-# MVP Phase 2: Conversation API Models
-class CreateConversationResponse(BaseModel):
-    conversation_id: str
-
-class ConversationMessage(BaseModel):
-    id: str
-    type: str  # 'system' | 'user' | 'ai'
-    content: str
-    timestamp: str
-
-class PlanTask(BaseModel):
-    id: str
-    title: str
-    due: Optional[str] = None
-    created_at: str
-    subtasks: List[dict]  # Simplified for MVP
-
-class ConversationHistoryResponse(BaseModel):
-    messages: List[ConversationMessage]
-    plan_tasks: Optional[List[PlanTask]] = None
 
 
 @router.get("/ping")

@@ -55,9 +55,11 @@ const saveConversationCache = () => {
     planTasks: planTasks.value,
     lastUpdated: new Date().toISOString()
   }
+  console.log('Saving cache with messages:', messages.value.length, 'planTasks:', planTasks.value.length)
   localStorage.setItem(CONVERSATION_CACHE_KEY, JSON.stringify(cache))
   if (conversationId.value) {
     localStorage.setItem(CONVERSATION_ID_KEY, conversationId.value)
+    console.log('Saved conversationId:', conversationId.value)
   }
 }
 
@@ -86,14 +88,23 @@ const clearConversationCache = () => {
 
 // 初始化对话
 const initializeConversation = async () => {
+  console.log('Starting conversation initialization...')
+  console.log('Current localStorage state:')
+  console.log('- conversation_cache exists:', !!localStorage.getItem(CONVERSATION_CACHE_KEY))
+  console.log('- conversation_id exists:', !!localStorage.getItem(CONVERSATION_ID_KEY))
   try {
     // 尝试从缓存加载
     const cache = loadConversationCache()
+    console.log('Cache loaded:', !!cache)
     if (cache) {
+      console.log('Cache contains messages:', cache.messages?.length || 0)
+      console.log('Cache contains planTasks:', cache.planTasks?.length || 0)
       // 如果有缓存，尝试从服务器加载最新历史
       if (conversationId.value) {
+        console.log('Attempting to load from server with conversationId:', conversationId.value)
         try {
           const history = await getConversationHistory(conversationId.value)
+          console.log('Server history loaded successfully, messages:', history.messages?.length || 0)
           // 使用服务器的历史数据重建界面
           messages.value = history.messages.map(msg => ({
             id: parseInt(msg.id),
@@ -101,7 +112,12 @@ const initializeConversation = async () => {
             content: msg.content
           }))
 
-          if (history.plan_tasks) {
+          // 对于MVP Phase 2，任务存储在前端缓存中，不从服务器加载
+          // 如果有缓存的任务，使用缓存的任务
+          if (cache.planTasks && cache.planTasks.length > 0) {
+            planTasks.value = cache.planTasks
+            console.log('Using cached planTasks:', cache.planTasks.length)
+          } else if (history.plan_tasks) {
             planTasks.value = history.plan_tasks.map(task => ({
               id: task.id,
               title: task.title,
@@ -125,6 +141,7 @@ const initializeConversation = async () => {
         }
       }
     } else {
+      console.log('No cache found, creating new conversation')
       // 没有缓存，创建新对话
       conversationId.value = await createConversation()
       saveConversationCache()
@@ -139,11 +156,13 @@ const initializeConversation = async () => {
       console.error('Failed to create fallback conversation:', fallbackError)
     }
   } finally {
+    console.log('Initialization complete, isInitializing = false')
     isInitializing.value = false
   }
 }
 
 const sendMessage = async () => {
+  console.log('sendMessage called with input:', userInput.value.trim())
   if (!userInput.value.trim() || isLoading.value) return
 
   const inputText = userInput.value.trim()
@@ -165,7 +184,7 @@ const sendMessage = async () => {
   isLoading.value = true
 
   try {
-    const response = await sendUserRequest(inputText)
+    const response = await sendUserRequest(inputText, conversationId.value)
     const aiMessage: Message = {
       id: Date.now() + 1,
       type: 'ai',
@@ -220,45 +239,7 @@ const deriveDue = (userInput: string): string | undefined => {
 }
 
 const createSubtasks = (userInput: string): Subtask[] => {
-  const lower = userInput.toLowerCase()
   const baseId = Date.now()
-
-  if (lower.includes('java') && lower.includes('作業')) {
-    return [
-      {
-        id: `subtask-${baseId}-1`,
-        title: '學習Java基礎語法',
-        description: '掌握變數、資料型別與運算子',
-        priority: 1,
-        estimatedTime: '2小時',
-        completed: false
-      },
-      {
-        id: `subtask-${baseId}-2`,
-        title: '完成指定作業題目',
-        description: '實作題目並完成主要功能',
-        priority: 2,
-        estimatedTime: '3小時',
-        completed: false
-      },
-      {
-        id: `subtask-${baseId}-3`,
-        title: '程式碼測試與除錯',
-        description: '測試程式並修正錯誤',
-        priority: 3,
-        estimatedTime: '1小時',
-        completed: false
-      },
-      {
-        id: `subtask-${baseId}-4`,
-        title: '作業提交與複習',
-        description: '確認內容後提交並複習學習成果',
-        priority: 4,
-        estimatedTime: '1小時',
-        completed: false
-      }
-    ]
-  }
 
   return [
     {

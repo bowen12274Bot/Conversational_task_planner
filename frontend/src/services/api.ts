@@ -52,10 +52,10 @@ export async function getPingMessage(): Promise<string> {
   return data.message
 }
 
-export async function sendUserRequest(userInput: string): Promise<ControllerToFrontendResponse> {
+export async function sendUserRequest(userInput: string, conversationId?: string): Promise<ControllerToFrontendResponse> {
   const payload: FrontendToControllerRequest = {
     user_input: userInput,
-    interaction_info: {}
+    interaction_info: conversationId ? { conversation_id: conversationId } : {}
   }
 
   const response = await fetch(`${API_BASE_URL}/api/raw-request`, {

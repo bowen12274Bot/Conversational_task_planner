@@ -51,9 +51,12 @@ def db_check() -> dict[str, str]:
 
 @router.post("/raw-request", response_model=ControllerToFrontendResponse)
 def raw_request(payload: FrontendToControllerRequest) -> ControllerToFrontendResponse:
-    # MVP Phase 2: For now, create a simple conversation if none exists
-    # In full implementation, conversation_id should come from frontend
-    conversation_id = "temp-conversation"
+    # MVP Phase 2: Use conversation_id from interaction_info if provided
+    conversation_id = payload.interaction_info.get('conversation_id') if payload.interaction_info else None
+    if not conversation_id:
+        # Fallback to temp conversation for backward compatibility
+        conversation_id = "temp-conversation"
+    
     if conversation_id not in conversations:
         conversations[conversation_id] = {
             'messages': [],

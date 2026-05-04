@@ -56,6 +56,7 @@
 ### 組成內容
 
 - `conversation_id`
+- `turn_id`（可為空）
 - `type`
 - `content`
 
@@ -67,6 +68,7 @@
 ### 特性
 
 - `conversation_id` 用於識別本次對話紀錄所屬的對話主體
+- `turn_id` 在使用者訊息初次送入時可為空，之後由持久化層建立並回傳
 - `type` 現階段主要對應 `user`、`ai` 與 `system`
 - `content` 表示本次要保存的訊息內容
 

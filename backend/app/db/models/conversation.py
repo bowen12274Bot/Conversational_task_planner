@@ -10,18 +10,31 @@ turn_messages        – individual messages inside a turn
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..base import Base
 
 
 class Conversation(Base):
-    """Stores a single conversation session (the top-level container)."""
+    """Stores a single conversation session."""
 
     __tablename__ = "conversations"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_pk: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    conversation_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
@@ -35,7 +48,7 @@ class Conversation(Base):
         "ConversationTurn",
         back_populates="conversation",
         cascade="all, delete-orphan",
-        order_by="ConversationTurn.turn_index",
+        order_by="ConversationTurn.created_at",
     )
 
 
@@ -44,11 +57,15 @@ class ConversationTurn(Base):
 
     __tablename__ = "conversation_turns"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    conversation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    turn_pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_pk: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("conversations.conversation_pk", ondelete="CASCADE"),
+        nullable=False,
     )
-    turn_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    turn_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -66,7 +83,7 @@ class ConversationTurn(Base):
         "TurnMessage",
         back_populates="turn",
         cascade="all, delete-orphan",
-        order_by="TurnMessage.created_at",
+        order_by="TurnMessage.message_index",
     )
 
 
@@ -74,12 +91,20 @@ class TurnMessage(Base):
     """Stores a single message (user / ai / system) within a turn."""
 
     __tablename__ = "turn_messages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    turn_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("conversation_turns.id", ondelete="CASCADE"), nullable=False
+    __table_args__ = (
+        UniqueConstraint("turn_pk", "message_index", name="uq_turn_message_index"),
     )
-    role: Mapped[str] = mapped_column(Text, nullable=False)  # "user" | "ai" | "system"
+
+    message_pk: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    turn_pk: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("conversation_turns.turn_pk", ondelete="CASCADE"),
+        nullable=False,
+    )
+    message_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    type: Mapped[str] = mapped_column(Text, nullable=False)  # "user" | "ai" | "system"
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

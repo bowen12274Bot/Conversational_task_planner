@@ -1,6 +1,6 @@
 # Database Conversation Tables — 設計文件
 
-更新時間：2026-05-04
+更新時間：2026-05-04 19:34:00
 
 ---
 
@@ -28,7 +28,8 @@
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `id` | INTEGER | PK，自動遞增 |
+| `conversation_pk` | INTEGER | 內部 PK，自動遞增 |
+| `conversation_id` | STRING(64) | 對外使用的對話識別值，唯一 |
 | `title` | TEXT | 對話標題，可為 null |
 | `created_at` | DATETIME | 對話建立時間，server default now |
 | `updated_at` | DATETIME | 最後更新時間，onupdate now |
@@ -39,9 +40,9 @@
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `id` | INTEGER | PK，自動遞增 |
-| `conversation_id` | INTEGER | FK → `conversations.id` |
-| `turn_index` | INTEGER | 本回合在對話中的順序（從 0 開始） |
+| `turn_pk` | INTEGER | 內部 PK，自動遞增 |
+| `conversation_pk` | INTEGER | FK → `conversations.conversation_pk` |
+| `turn_id` | STRING(64) | 對外使用的回合識別值，唯一 |
 | `created_at` | DATETIME | 回合建立時間，server default now |
 | `updated_at` | DATETIME | 最後更新時間，onupdate now |
 
@@ -51,9 +52,10 @@
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `id` | INTEGER | PK，自動遞增 |
-| `turn_id` | INTEGER | FK → `conversation_turns.id` |
-| `role` | TEXT | 訊息角色：`user` / `ai` / `system` |
+| `message_pk` | INTEGER | 內部 PK，自動遞增 |
+| `turn_pk` | INTEGER | FK → `conversation_turns.turn_pk` |
+| `message_index` | INTEGER | 訊息在同一回合中的順序（從 0 開始） |
+| `type` | TEXT | 訊息角色：`user` / `ai` / `system` |
 | `content` | TEXT | 訊息文字內容 |
 | `created_at` | DATETIME | 訊息建立時間，server default now |
 | `updated_at` | DATETIME | 最後更新時間，onupdate now |
@@ -64,8 +66,22 @@
 
 | FK 欄位 | 指向 | ON DELETE |
 |---|---|---|
-| `conversation_turns.conversation_id` | `conversations.id` | CASCADE |
-| `turn_messages.turn_id` | `conversation_turns.id` | CASCADE |
+| `conversation_turns.conversation_pk` | `conversations.conversation_pk` | CASCADE |
+| `turn_messages.turn_pk` | `conversation_turns.turn_pk` | CASCADE |
+
+### 外部 ID 與內部 PK 分離
+
+- `conversation_id` / `turn_id`：對外提供給前端、控制層與持久化契約使用的業務識別值
+- `conversation_pk` / `turn_pk` / `message_pk`：僅供資料庫內部關聯與 ORM 使用的主鍵
+
+此設計用於避免將資料庫內部自增主鍵直接暴露到跨層契約中。
+
+### 唯一性與排序規則
+
+- `conversation_id` 必須唯一
+- `turn_id` 必須唯一
+- 同一個 `turn_pk` 下的 `message_index` 不可重複
+- `message_index` 目前先保留，供未來多段 AI chunk、SSE / streaming 或同回合額外 system 訊息時穩定排序使用
 
 ---
 
@@ -90,7 +106,8 @@
 
 ```
 conversations
-  PK id
+  PK conversation_pk
+     conversation_id
      title
      created_at
      updated_at
@@ -98,18 +115,19 @@ conversations
          │ 1 : N
          ▼
 conversation_turns
-  PK id
-  FK conversation_id → conversations.id
-     turn_index
+  PK turn_pk
+  FK conversation_pk → conversations.conversation_pk
+     turn_id
      created_at
      updated_at
          │
          │ 1 : N
          ▼
 turn_messages
-  PK id
-  FK turn_id → conversation_turns.id
-     role   ("user" | "ai" | "system")
+  PK message_pk
+  FK turn_pk → conversation_turns.turn_pk
+     message_index
+     type   ("user" | "ai" | "system")
      content
      created_at
      updated_at

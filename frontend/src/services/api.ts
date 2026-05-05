@@ -1,16 +1,28 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message?: string) {
+    super(message ?? `HTTP ${status}`)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 type PingResponse = {
   message: string
 }
 
 type FrontendToControllerRequest = {
   user_input: string
+  conversation_id: string
   interaction_info?: Record<string, any>
 }
 
 type ControllerToFrontendResponse = {
   reply_text: string
+  conversation_id?: string | null
   structured_task_output?: Record<string, any> | null
 }
 
@@ -19,24 +31,12 @@ type CreateConversationResponse = {
 }
 
 type ConversationHistoryResponse = {
-  messages: Array<{
-    id: string
-    type: 'system' | 'user' | 'ai'
-    content: string
-    timestamp: string
-  }>
-  plan_tasks?: Array<{
-    id: string
-    title: string
-    due?: string
-    created_at: string
-    subtasks: Array<{
-      id: string
-      title: string
-      description?: string
-      priority: number
-      estimated_time?: string
-      completed: boolean
+  conversation_id: string
+  turns: Array<{
+    turn_id: string
+    messages: Array<{
+      type: 'system' | 'user' | 'ai'
+      content: string
     }>
   }>
 }
@@ -45,17 +45,18 @@ export async function getPingMessage(): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/ping`)
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
+    throw new ApiError(response.status)
   }
 
   const data = (await response.json()) as PingResponse
   return data.message
 }
 
-export async function sendUserRequest(userInput: string, conversationId?: string): Promise<ControllerToFrontendResponse> {
+export async function sendUserRequest(userInput: string, conversationId: string): Promise<ControllerToFrontendResponse> {
   const payload: FrontendToControllerRequest = {
     user_input: userInput,
-    interaction_info: conversationId ? { conversation_id: conversationId } : {}
+    conversation_id: conversationId,
+    interaction_info: {}
   }
 
   const response = await fetch(`${API_BASE_URL}/api/raw-request`, {
@@ -67,7 +68,7 @@ export async function sendUserRequest(userInput: string, conversationId?: string
   })
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
+    throw new ApiError(response.status)
   }
 
   return (await response.json()) as ControllerToFrontendResponse
@@ -82,7 +83,7 @@ export async function createConversation(): Promise<string> {
   })
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
+    throw new ApiError(response.status)
   }
 
   const data = (await response.json()) as CreateConversationResponse
@@ -93,7 +94,7 @@ export async function getConversationHistory(conversationId: string): Promise<Co
   const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}/history`)
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
+    throw new ApiError(response.status)
   }
 
   return (await response.json()) as ConversationHistoryResponse

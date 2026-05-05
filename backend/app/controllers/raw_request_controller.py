@@ -8,10 +8,10 @@ from app.schemas import (
     QuestioningDecision,
     ResponseOutput,
 )
-from app.services.context_engineering_service import build_context_from_raw_input
-from app.services.questioning_service import evaluate_questioning_need
+from app.services.modules.context_engineering import build_context_from_raw_input
+from app.services.modules.questioning import evaluate_questioning_need
 from app.services.persistence import store_conversation_record
-from app.services.response_service import build_response_from_questioning
+from app.services.modules.response import build_response_from_questioning
 
 
 RAW_REQUEST_START_STAGE = "F001"

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class PromptBuilderOutput(BaseModel):
-    """由 `prompt_builder.py` 產生的提示建構輸出資料，用於承接提示內容與對應 Provider payload。"""
+    """由 AI service layer 的 prompt builder 產生的提示建構輸出資料，用於承接提示內容與對應 Provider payload。"""
 
     # 提供模型閱讀的提示文字內容
     prompt_text: str = Field(..., min_length=1)

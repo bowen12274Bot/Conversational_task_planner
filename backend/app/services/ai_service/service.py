@@ -13,7 +13,7 @@ from app.services.ai_service.config_loader import (
     load_model_config,
 )
 from app.services.ai_service.env_loader import load_provider_api_key
-from app.services.ai_service.prompt_builder import (
+from app.services.ai_service.prompt import (
     build_ai_studio_request_payload,
     build_openrouter_request_payload,
 )

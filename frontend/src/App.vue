@@ -16,6 +16,8 @@ const {
   toggleSubtaskCompletion,
 } = useTemporaryPlanning()
 
+const showTemporaryPlanning = false
+
 const sendMessage = async () => {
   const result = await sendConversationMessage()
 
@@ -58,7 +60,7 @@ const sendMessage = async () => {
     <div class="planning-panel">
       <h2>任務規劃面板</h2>
 
-      <div v-if="planTasks.length === 0" class="no-planning-state">
+      <div v-if="!showTemporaryPlanning || planTasks.length === 0" class="no-planning-state">
         <p>尚未有規劃任務</p>
         <p>請在左側聊天區輸入目標，例如「java作業 7天完成」。</p>
       </div>

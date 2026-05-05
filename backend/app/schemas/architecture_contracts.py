@@ -74,8 +74,6 @@ class ModuleToAIRequest(BaseModel):
     capability_level: str = Field(..., min_length=1)
     # 提供給 AI 任務的輸入資料。
     input_data: dict[str, Any] = Field(default_factory=dict)
-    # 本次 AI 任務希望達成的輸出目標或參考模板。
-    output_target: str = Field(..., min_length=1)
     # 可選的格式要求或欄位限制。
     format_requirements: dict[str, Any] | None = None
 

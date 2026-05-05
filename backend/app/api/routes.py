@@ -23,6 +23,8 @@ from app.services.ai_service.service import run_ai_flow
 
 router = APIRouter(prefix="/api")
 
+CONVERSATION_NOT_FOUND_MESSAGE = "找不到對應的 conversation_id。"
+
 
 def _error_response(
     status_code: int, error_message: str, error_stage: str
@@ -85,6 +87,18 @@ def raw_request(payload: FrontendToControllerRequest) -> Any:
     try:
         controller = RawRequestController()
         return controller.handle_raw_request(payload)
+    except ValueError as exc:
+        if str(exc) == CONVERSATION_NOT_FOUND_MESSAGE:
+            return _error_response(
+                status_code=404,
+                error_message=str(exc),
+                error_stage="controller",
+            )
+        return _error_response(
+            status_code=500,
+            error_message=f"主流程處理時發生錯誤：{exc}",
+            error_stage="controller",
+        )
     except Exception as exc:
         return _error_response(
             status_code=500,
@@ -109,6 +123,18 @@ def get_conversation_history(conversation_id: str) -> Any:
     try:
         controller = ConversationHistoryController()
         return controller.handle_conversation_history(conversation_id)
+    except ValueError as exc:
+        if str(exc) == CONVERSATION_NOT_FOUND_MESSAGE:
+            return _error_response(
+                status_code=404,
+                error_message=str(exc),
+                error_stage="controller",
+            )
+        return _error_response(
+            status_code=500,
+            error_message=f"查詢歷史紀錄時發生錯誤：{exc}",
+            error_stage="controller",
+        )
     except Exception as exc:
         return _error_response(
             status_code=500,

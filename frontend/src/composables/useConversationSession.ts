@@ -130,7 +130,25 @@ export function useConversationSession() {
     isLoading.value = true
 
     try {
-      const response = await sendUserRequest(inputText, conversationId.value)
+      let response
+
+      try {
+        response = await sendUserRequest(inputText, conversationId.value)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          await rebuildConversation()
+          messages.value.push({
+            id: createMessageId(),
+            type: 'user',
+            content: inputText,
+          })
+          persistConversationCache()
+          response = await sendUserRequest(inputText, conversationId.value!)
+        } else {
+          throw error
+        }
+      }
+
       if (response.conversation_id) {
         conversationId.value = response.conversation_id
         saveConversationId(response.conversation_id)

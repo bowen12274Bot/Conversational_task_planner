@@ -24,7 +24,7 @@ def test_build_context_engineering_ai_request_contains_format_requirements() -> 
         "known_information",
         "pending_confirmation",
     ]
-    assert request.format_requirements["allowed_labels"]["recommended"]
+    assert request.format_requirements["allowed_labels"]["values"]
 
 
 def test_build_context_engineering_prompt_spec_rejects_blank_input() -> None:

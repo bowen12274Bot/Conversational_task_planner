@@ -6,6 +6,12 @@ from app.services.ai_service.service import run_ai_flow
 from app.services.modules.context_engineering.prompt import (
     build_context_engineering_ai_request,
 )
+from app.services.modules.context_engineering.validator import (
+    validate_context_engineering_output,
+)
+
+
+MAX_CONTEXT_ENGINEERING_RETRY_COUNT = 3
 
 
 def build_context_from_raw_input(
@@ -19,18 +25,30 @@ def build_context_from_raw_input(
         raise ValueError("user_input 不可為空白。")
 
     ai_request = build_context_engineering_ai_request(normalized_input)
-    ai_result = run_ai_flow(ai_request)
+    retry_count = 0
+    last_failure_reason = "unknown_error"
+    last_failure_details: dict[str, Any] = {}
 
-    if not ai_result.success:
-        return _build_fallback_context(
+    while retry_count < MAX_CONTEXT_ENGINEERING_RETRY_COUNT:
+        ai_result = run_ai_flow(ai_request)
+        parse_result, failure_reason, failure_details = _parse_context_engineering_result(
+            ai_result=ai_result,
             user_input=normalized_input,
             history_context_summary=history_context_summary,
         )
 
-    return _parse_context_engineering_result(
-        ai_result=ai_result,
-        user_input=normalized_input,
-        history_context_summary=history_context_summary,
+        if parse_result is None:
+            last_failure_reason = failure_reason
+            last_failure_details = failure_details
+            retry_count += 1
+            continue
+
+        return parse_result
+
+    raise ValueError(
+        "Context engineering output validation failed after "
+        f"{MAX_CONTEXT_ENGINEERING_RETRY_COUNT} attempts. "
+        f"reason={last_failure_reason}, details={last_failure_details}"
     )
 
 
@@ -38,15 +56,24 @@ def _parse_context_engineering_result(
     ai_result: AIToModuleResult,
     user_input: str,
     history_context_summary: str | None = None,
-) -> ContextEngineeringOutput:
+) -> tuple[ContextEngineeringOutput | None, str, dict[str, Any]]:
     """將 AI 回傳結果整理為 ContextEngineeringOutput。"""
+
+    if not ai_result.success:
+        return None, "ai_service_error", {
+            "error_message": ai_result.error_message,
+            "error_stage": ai_result.error_stage,
+        }
 
     # AI service layer 先回傳通用結果，模組層再將其中內容轉成自己的業務資料形狀。
     parsed_output = _extract_context_engineering_output(ai_result.output_result)
     if parsed_output is None:
-        return _build_fallback_context(
-            user_input=user_input,
-            history_context_summary=history_context_summary,
+        return None, "unparseable_output", {}
+
+    validation_result = validate_context_engineering_output(parsed_output)
+    if not validation_result.is_valid:
+        return None, validation_result.reason or "validation_failed", dict(
+            validation_result.details
         )
 
     requirement_context = parsed_output.get("requirement_context")
@@ -65,7 +92,7 @@ def _parse_context_engineering_result(
         known_information=known_information,
         pending_confirmation=pending_confirmation,
         history_context_summary=history_context_summary,
-    )
+    ), "accept", {}
 
 
 def _extract_context_engineering_output(
@@ -150,17 +177,3 @@ def _collect_information_list(value: Any) -> list[dict[str, Any]]:
             collected_items.append(item)
 
     return collected_items
-
-
-def _build_fallback_context(
-    user_input: str,
-    history_context_summary: str | None = None,
-) -> ContextEngineeringOutput:
-    """當 AI 回傳失敗或格式不符時，建立最小可用的 fallback context。"""
-
-    return ContextEngineeringOutput(
-        requirement_context=user_input,
-        known_information=[],
-        pending_confirmation=[],
-        history_context_summary=history_context_summary,
-    )

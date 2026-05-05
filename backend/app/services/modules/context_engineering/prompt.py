@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.schemas import ModuleToAIRequest
+from app.services.modules.context_engineering.labels import ALLOWED_LABELS
 
 
 TASK_TYPE = "context_engineering"
@@ -94,18 +95,10 @@ def _build_format_requirements() -> dict[str, Any]:
             "Return an empty list when there is no suitable item for known_information or pending_confirmation.",
         ],
         "allowed_labels": {
-            "recommended": [
-                "task_type",
-                "deadline_hint",
-                "current_progress",
-                "time_budget",
-                "difficulty",
-                "constraint",
-            ],
+            "values": list(ALLOWED_LABELS),
             "guidance": (
-                "Use these labels when they fit the user's input. "
-                "If none fit well, you may create a short snake_case label "
-                "that clearly describes the information."
+                "You must use only labels from this allowed set. "
+                "Do not create new labels."
             ),
         },
     }

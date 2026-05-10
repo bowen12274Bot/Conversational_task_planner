@@ -1,7 +1,9 @@
 from typing import Any
 
 from app.schemas import ModuleToAIRequest
-from app.services.modules.context_engineering.labels import ALLOWED_LABELS
+from app.services.modules.shared.requirement_labels import (
+    ALLOWED_REQUIREMENT_LABELS,
+)
 
 
 TASK_TYPE = "context_engineering"
@@ -95,7 +97,7 @@ def _build_format_requirements() -> dict[str, Any]:
             "Return an empty list when there is no suitable item for known_information or pending_confirmation.",
         ],
         "allowed_labels": {
-            "values": list(ALLOWED_LABELS),
+            "values": list(ALLOWED_REQUIREMENT_LABELS),
             "guidance": (
                 "You must use only labels from this allowed set. "
                 "Do not create new labels."

@@ -1,4 +1,7 @@
 from app.schemas import ContextEngineeringOutput, QuestioningDecision
+from app.services.modules.shared.requirement_labels import (
+    get_requirement_label_display_text,
+)
 
 
 def evaluate_questioning_need(
@@ -42,7 +45,7 @@ def _build_reasoning_text(
     for item in pending_confirmation:
         label = item.get("label")
         if isinstance(label, str) and label.strip():
-            missing_information_names.append(_map_label_to_display_text(label))
+            missing_information_names.append(get_requirement_label_display_text(label))
 
     if not missing_information_names:
         return (
@@ -56,17 +59,3 @@ def _build_reasoning_text(
         f"但目前仍缺少 {missing_information_text}，"
         "先補這些資訊會比較適合後續規劃。"
     )
-
-
-def _map_label_to_display_text(label: str) -> str:
-    """將內部 label 轉為較自然的中文描述。"""
-
-    label_display_map = {
-        "current_progress": "目前進度",
-        "time_budget": "可投入時間",
-        "difficulty": "困難點",
-        "constraint": "限制條件",
-        "deadline_hint": "期限",
-        "task_type": "任務內容",
-    }
-    return label_display_map.get(label, label)

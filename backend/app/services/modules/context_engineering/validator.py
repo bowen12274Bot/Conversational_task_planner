@@ -1,7 +1,9 @@
 from typing import Any
 
 from pydantic import BaseModel, Field
-from app.services.modules.context_engineering.labels import ALLOWED_LABELS
+from app.services.modules.shared.requirement_labels import (
+    ALLOWED_REQUIREMENT_LABELS,
+)
 
 
 class ContextEngineeringValidationResult(BaseModel):
@@ -106,7 +108,7 @@ def _validate_information_items(
                 details={"field": field_name, "index": index},
             )
 
-        if label not in ALLOWED_LABELS:
+        if label not in ALLOWED_REQUIREMENT_LABELS:
             invalid_labels.append(label)
 
         value = item.get(required_value_key)

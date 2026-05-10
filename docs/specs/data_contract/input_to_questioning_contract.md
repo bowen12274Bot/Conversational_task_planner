@@ -1,6 +1,6 @@
 # 輸入至 Questioning 資料契約
 
-本文件用於定義系統從使用者開始輸入需求，到 `Questioning Module` 產出判斷結果之間的三個核心資料物件。
+本文件用於定義系統從使用者輸入需求開始，到 `Questioning Module` 產出判斷結果為止的前置鏈路資料契約。
 
 ---
 
@@ -80,11 +80,13 @@
 
 - 提供流程控制層決定下一步應進入追問或規劃
 - 提供後續模組沿用已知資訊與待確認資訊
+- 作為 `Response Module` 在追問情境下生成回覆的直接輸入
 
 ### 特性
 
 - 是否足以開始規劃的狀態即可決定是否進入追問
 - 不另外定義獨立的「是否追問」狀態
+- 仍屬於 `Questioning Module` 的輸出，不負責定義 `Response Module` 的對外輸出格式
 
 ---
 
@@ -94,4 +96,4 @@
 |---|---|---|
 | 1 | 原始需求輸入 -> Context Engineering 整理結果 | `Context Engineering Module` 以原始需求為基礎，整理出可供後續模組使用的資訊 |
 | 2 | Context Engineering 整理結果 -> Questioning 判斷結果 | `Questioning Module` 根據整理結果判斷目前資訊是否足以開始規劃 |
-| 3 | Questioning 判斷結果 -> 後續模組 | `Questioning 判斷結果` 會保留 `已知資訊集合` 與 `待確認資訊集合`，供後續模組延用 |
+| 3 | Questioning 判斷結果 -> 後續模組 | `QuestioningDecision` 會保留 `已知資訊集合` 與 `待確認資訊集合`，供控制層、`Response Module` 與後續規劃流程延用 |

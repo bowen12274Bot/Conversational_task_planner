@@ -30,8 +30,6 @@ def build_response_from_questioning(
             return ResponseOutput(
                 reply_text=reply_text.strip(),
                 response_type="follow_up_question",
-                includes_follow_up_questions=True,
-                includes_next_action=True,
             )
 
         retry_count += 1
@@ -95,6 +93,4 @@ def _build_fallback_follow_up_response(
     return ResponseOutput(
         reply_text=reply_text,
         response_type="follow_up_question",
-        includes_follow_up_questions=True,
-        includes_next_action=True,
     )

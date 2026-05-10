@@ -71,8 +71,6 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
         lambda questioning_decision: ResponseOutput(
             reply_text="請先補充每天可投入的時間。",
             response_type="follow_up_question",
-            includes_follow_up_questions=True,
-            includes_next_action=True,
         ),
     )
 

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,9 +41,5 @@ class ResponseOutput(BaseModel):
 
     # 適合直接顯示給使用者的回覆文字。
     reply_text: str = Field(..., min_length=1)
-    # 回覆在互動流程中的類型。
-    response_type: str = Field(..., min_length=1)
-    # 回覆是否附帶追問內容。
-    includes_follow_up_questions: bool = False
-    # 回覆是否附帶後續動作指示。
-    includes_next_action: bool = False
+    # 回覆在互動流程中的類型。現階段僅明確支援追問引導回覆。
+    response_type: Literal["follow_up_question"]

@@ -44,13 +44,11 @@ def test_controller_response_contract_keeps_minimal_output_shape() -> None:
 def test_response_output_contract_keeps_only_documented_fields() -> None:
     response = ResponseOutput(
         reply_text="請先補充截止時間。",
-        response_type="questioning_guidance",
-        includes_follow_up_questions=True,
-        includes_next_action=True,
+        response_type="follow_up_question",
     )
 
-    assert response.includes_follow_up_questions is True
-    assert response.includes_next_action is True
+    assert response.reply_text == "請先補充截止時間。"
+    assert response.response_type == "follow_up_question"
 
 
 def test_ai_task_request_contract_supports_grouped_ai_requests() -> None:
@@ -59,11 +57,12 @@ def test_ai_task_request_contract_supports_grouped_ai_requests() -> None:
         group_name="questioning_decision",
         capability_level="default",
         input_data={"user_input": "我想做一個期中報告規劃"},
-        output_target="產出 Questioning 判斷結果",
+        format_requirements={"output_type": "json"},
     )
 
     assert request.group_name == "questioning_decision"
     assert request.capability_level == "default"
+    assert request.format_requirements == {"output_type": "json"}
 
 
 def test_ai_service_internal_contracts_keep_expected_shapes() -> None:

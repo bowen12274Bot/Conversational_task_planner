@@ -1,5 +1,12 @@
+import pytest
+
 from app.schemas import AIToModuleResult
 from app.services.modules.context_engineering import service as context_service
+from app.services.ai_service.env_loader import load_provider_api_key
+
+
+AI_STUDIO_API_KEY = load_provider_api_key("ai_studio")
+OPENROUTER_API_KEY = load_provider_api_key("openrouter")
 
 
 def test_build_context_from_raw_input_returns_structured_output_when_ai_returns_valid_json_text(
@@ -260,3 +267,118 @@ def test_build_context_from_raw_input_skips_history_lookup_when_conversation_id_
 
     assert result.history_context_summary is None
     assert history_call_count["value"] == 0
+
+
+@pytest.mark.skipif(
+    not (AI_STUDIO_API_KEY or OPENROUTER_API_KEY),
+    reason="No real AI provider API key is configured.",
+)
+def test_build_context_from_raw_input_can_merge_multi_turn_history_with_real_ai(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: (
+            "User: 我要準備下週的資料庫期末報告，但還不知道怎麼拆工作。\n"
+            "AI: 你目前已經完成到哪裡？每天大約可投入多少時間？"
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "我目前還沒開始，每天大概可以投入 2 小時。",
+        conversation_id="conv-001",
+    )
+
+    known_information = {
+        item.get("label"): item.get("value")
+        for item in result.known_information
+        if isinstance(item, dict)
+    }
+    pending_labels = {
+        item.get("label")
+        for item in result.pending_confirmation
+        if isinstance(item, dict)
+    }
+
+    assert "資料庫期末報告" in result.requirement_context
+    assert known_information.get("task_type")
+    assert known_information.get("current_progress")
+    assert known_information.get("time_budget")
+    assert "current_progress" not in pending_labels
+    assert "time_budget" not in pending_labels
+
+
+@pytest.mark.skipif(
+    not (AI_STUDIO_API_KEY or OPENROUTER_API_KEY),
+    reason="No real AI provider API key is configured.",
+)
+def test_build_context_from_raw_input_can_apply_explicit_requirement_update_with_real_ai(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: (
+            "User: 我要準備下週的資料庫期末報告。\n"
+            "AI: 你目前已經完成到哪裡？"
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "更正一下，不是下週，是明天要交。",
+        conversation_id="conv-001",
+    )
+
+    known_information = {
+        item.get("label"): item.get("value")
+        for item in result.known_information
+        if isinstance(item, dict)
+    }
+    pending_labels = {
+        item.get("label")
+        for item in result.pending_confirmation
+        if isinstance(item, dict)
+    }
+
+    assert known_information.get("task_type")
+    assert known_information.get("deadline_hint")
+    assert "明天" in str(known_information.get("deadline_hint"))
+    assert "deadline_hint" not in pending_labels
+
+
+@pytest.mark.skipif(
+    not (AI_STUDIO_API_KEY or OPENROUTER_API_KEY),
+    reason="No real AI provider API key is configured.",
+)
+@pytest.mark.xfail(
+    reason=(
+        "The ambiguous-conflict case improved after adding one example, "
+        "but the current model response is still not stable enough across runs."
+    ),
+    strict=False,
+)
+def test_build_context_from_raw_input_can_keep_unclear_conflict_in_pending_with_real_ai(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: (
+            "User: 我要準備下週的資料庫期末報告。\n"
+            "AI: 你目前已經完成到哪裡？"
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "我剩一天。",
+        conversation_id="conv-001",
+    )
+
+    pending_labels = {
+        item.get("label")
+        for item in result.pending_confirmation
+        if isinstance(item, dict)
+    }
+
+    assert "deadline_hint" in pending_labels

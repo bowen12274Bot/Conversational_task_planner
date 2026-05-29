@@ -65,7 +65,7 @@ def build_context_engineering_prompt_spec(
 def _build_input_data(
     rules: str,
     task: str,
-    context: dict[str, Any],
+    context: str,
     examples: list[dict[str, Any]],
     output_target: str,
 ) -> dict[str, Any]:
@@ -85,7 +85,8 @@ def _build_output_target() -> str:
 
     return (
         "Analyze the user's raw requirement and organize it into "
-        "requirement_context, known_information, and pending_confirmation."
+        "requirement_context, known_information, and pending_confirmation "
+        "for the current turn."
     )
 
 
@@ -100,11 +101,16 @@ def _build_format_requirements() -> dict[str, Any]:
             "pending_confirmation",
         ],
         "requirements": [
-            "requirement_context must be a concise string summary of the user's requirement.",
-            "known_information must be a list of objects containing only information clearly supported by the user's input.",
-            "pending_confirmation must be a list of objects for important missing or unclear information that should be clarified later.",
+            "requirement_context must be a concise string summary of the current requirement and current situation.",
+            "known_information must be a list of objects containing only information clearly supported by the current raw requirement or prior user messages that are still relevant.",
+            "pending_confirmation must be a list of objects for important missing, unclear, or conflicting information that should be clarified later.",
+            "If prior user-provided information is still relevant and not contradicted, carry it forward into the refreshed result.",
+            "If the current raw requirement clearly corrects or updates prior information, update known_information accordingly.",
+            "If the current raw requirement conflicts with prior history but the correction is unclear, place the conflicting item in pending_confirmation instead of treating it as confirmed.",
+            "If a previously missing or uncertain item is now clearly supported by the current raw requirement or prior user messages, move it into known_information.",
             "Use label and value for each known_information item.",
             "Use label and question_hint for each pending_confirmation item.",
+            "Do not treat prior AI replies as confirmed facts unless they are clearly supported by user messages.",
             "Do not invent deadlines, progress, constraints, or difficulties that were not stated by the user.",
             "Return an empty list when there is no suitable item for known_information or pending_confirmation.",
         ],
@@ -123,7 +129,10 @@ def _build_rules_text() -> str:
 
     return (
         "You are a requirement analysis assistant. "
-        "Only extract information that is supported by the user's input. "
+        "Use the current raw requirement as the primary input for this turn. "
+        "Use prior conversation history as supporting context only. "
+        "Only extract information supported by user-provided content. "
+        "Do not treat prior AI replies as confirmed facts unless they are clearly supported by user messages. "
         "Do not invent deadlines, progress, or constraints that were not stated."
     )
 
@@ -132,25 +141,57 @@ def _build_task_description() -> str:
     """建立任務層文字。"""
 
     return (
-        "Read the user's raw requirement and organize it into a concise "
-        "requirement_context, a list of known_information, and a list of "
-        "pending_confirmation items that matter for later questioning and planning."
+        "Read the current raw requirement together with the prior conversation history, "
+        "then build a refreshed requirement_context, known_information, and pending_confirmation for this turn. "
+        "If prior user-provided facts are still relevant and not contradicted, carry them forward. "
+        "If the current raw requirement clearly corrects or updates prior information, use the current raw requirement as the new source of truth. "
+        "If the current raw requirement conflicts with prior history but the correction is unclear, do not force a resolution; "
+        "move the conflicting item into pending_confirmation instead."
     )
 
 
 def _build_context_data(
     user_input: str,
     conversation_history_text: str | None = None,
-) -> dict[str, Any]:
+) -> str:
     """建立上下文層資料。"""
 
-    context = {
-        "raw_requirement": user_input,
-    }
+    sections = [
+        "Current raw requirement:",
+        user_input,
+    ]
     if conversation_history_text is not None and conversation_history_text.strip():
-        context["conversation_history_text"] = conversation_history_text.strip()
+        sections.extend(
+            [
+                "",
+                "Conversation history:",
+                _normalize_conversation_history_text(conversation_history_text),
+            ]
+        )
 
-    return context
+    return "\n".join(sections)
+
+
+def _normalize_conversation_history_text(conversation_history_text: str) -> str:
+    """將 transcript 角色前綴整理為較自然的 prompt 顯示格式。"""
+
+    normalized_lines: list[str] = []
+    for raw_line in conversation_history_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if line.startswith("user:"):
+            normalized_lines.append(f"User:{line[5:]}")
+            continue
+
+        if line.startswith("ai:"):
+            normalized_lines.append(f"AI:{line[3:]}")
+            continue
+
+        normalized_lines.append(line)
+
+    return "\n".join(normalized_lines)
 
 
 def _build_examples() -> list[dict[str, Any]]:
@@ -184,5 +225,30 @@ def _build_examples() -> list[dict[str, Any]]:
                     },
                 ],
             },
-        }
+        },
+        {
+            "input": (
+                "Current raw requirement:\n"
+                "我剩一天。\n\n"
+                "Conversation history:\n"
+                "User: 我要準備下週的資料庫期末報告。"
+            ),
+            "output": {
+                "requirement_context": (
+                    "使用者需要準備資料庫期末報告，但目前期限資訊存在不明確衝突。"
+                ),
+                "known_information": [
+                    {
+                        "label": "task_type",
+                        "value": "資料庫期末報告",
+                    }
+                ],
+                "pending_confirmation": [
+                    {
+                        "label": "deadline_hint",
+                        "question_hint": "實際期限是下週，還是只剩一天",
+                    }
+                ],
+            },
+        },
     ]

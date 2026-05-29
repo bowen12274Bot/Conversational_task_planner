@@ -2,6 +2,9 @@ from app.services.persistence.create_conversation import create_conversation
 from app.services.persistence.get_conversation_history import (
     get_conversation_history,
 )
+from app.services.persistence.get_conversation_transcript import (
+    get_conversation_transcript,
+)
 from app.services.persistence.store_conversation_record import (
     store_conversation_record,
 )
@@ -9,5 +12,6 @@ from app.services.persistence.store_conversation_record import (
 __all__ = [
     "create_conversation",
     "get_conversation_history",
+    "get_conversation_transcript",
     "store_conversation_record",
 ]

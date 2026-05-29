@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from app.schemas import AIToModuleResult, ContextEngineeringOutput
+from app.services.persistence import get_conversation_transcript
 from app.services.ai_service.service import run_ai_flow
 from app.services.modules.context_engineering.prompt import (
     build_context_engineering_ai_request,
@@ -16,7 +17,7 @@ MAX_CONTEXT_ENGINEERING_RETRY_COUNT = 3
 
 def build_context_from_raw_input(
     user_input: str,
-    history_context_summary: str | None = None,
+    conversation_id: str | None = None,
 ) -> ContextEngineeringOutput:
     """將使用者原始輸入整理為後續流程可用的基礎上下文。"""
 
@@ -24,7 +25,11 @@ def build_context_from_raw_input(
     if not normalized_input:
         raise ValueError("user_input 不可為空白。")
 
-    ai_request = build_context_engineering_ai_request(normalized_input)
+    history_context_summary = _load_history_context_summary(conversation_id)
+    ai_request = build_context_engineering_ai_request(
+        normalized_input,
+        conversation_history_text=history_context_summary,
+    )
     retry_count = 0
     last_failure_reason = "unknown_error"
     last_failure_details: dict[str, Any] = {}
@@ -50,6 +55,15 @@ def build_context_from_raw_input(
         f"{MAX_CONTEXT_ENGINEERING_RETRY_COUNT} attempts. "
         f"reason={last_failure_reason}, details={last_failure_details}"
     )
+
+
+def _load_history_context_summary(conversation_id: str | None) -> str | None:
+    """依 conversation_id 載入聚合後的完整歷史文字內容。"""
+
+    if conversation_id is None or not conversation_id.strip():
+        return None
+
+    return get_conversation_transcript(conversation_id.strip())
 
 
 def _parse_context_engineering_result(

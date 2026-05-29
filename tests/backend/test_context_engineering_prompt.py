@@ -15,6 +15,17 @@ def test_build_context_engineering_ai_request_contains_sectioned_input_data() ->
     assert request.input_data["output_target"]
 
 
+def test_build_context_engineering_ai_request_includes_conversation_history_when_provided() -> None:
+    request = build_context_engineering_ai_request(
+        "我要整理下週的 API 串接工作",
+        conversation_history_text="user: 舊需求\nai: 舊回覆",
+    )
+
+    assert request.input_data["context"]["conversation_history_text"] == (
+        "user: 舊需求\nai: 舊回覆"
+    )
+
+
 def test_build_context_engineering_ai_request_contains_format_requirements() -> None:
     request = build_context_engineering_ai_request("我要整理下週的 API 串接工作")
 

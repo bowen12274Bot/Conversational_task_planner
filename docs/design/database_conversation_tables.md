@@ -31,6 +31,7 @@
 | `conversation_pk` | INTEGER | 內部 PK，自動遞增 |
 | `conversation_id` | STRING(64) | 對外使用的對話識別值，唯一 |
 | `title` | TEXT | 對話標題，可為 null |
+| `conversation_history_text` | TEXT | 聚合後的完整對話歷史文字，可為 null |
 | `created_at` | DATETIME | 對話建立時間，server default now |
 | `updated_at` | DATETIME | 最後更新時間，onupdate now |
 
@@ -74,6 +75,13 @@
 - `conversation_id` / `turn_id`：對外提供給前端、控制層與持久化契約使用的業務識別值
 - `conversation_pk` / `turn_pk` / `message_pk`：僅供資料庫內部關聯與 ORM 使用的主鍵
 
+### `conversation_history_text` 的用途
+
+- `conversation_history_text` 用於保存聚合後的完整對話歷史文字
+- 每當新的 `turn_message` 寫入時，應同步更新該 `conversation` 的此欄位
+- 此欄位主要提供 `Context Engineering Module` 與後續模組直接讀取歷史脈絡使用
+- 原始對話內容仍以 `conversation_turns` 與 `turn_messages` 作為正式保存來源
+
 此設計用於避免將資料庫內部自增主鍵直接暴露到跨層契約中。
 
 ### 唯一性與排序規則
@@ -109,6 +117,7 @@ conversations
   PK conversation_pk
      conversation_id
      title
+     conversation_history_text
      created_at
      updated_at
          │

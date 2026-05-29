@@ -41,7 +41,7 @@
 ### 分組說明
 
 - `context_for_questioning`
-  - 用於產出 `Context Engineering Module` 提供給 `Questioning Module` 的固定格式資料，例如需求脈絡、已知資訊集合、待確認資訊集合與歷史脈絡摘要。
+  - 用於產出 `Context Engineering Module` 提供給 `Questioning Module` 的固定格式資料，例如需求脈絡、已知資訊集合、待確認資訊集合與歷史脈絡內容。
 
 - `questioning_decision`
   - 用於一次產出 `Questioning Module` 的固定格式判斷結果，例如是否足以開始規劃、判斷原因、已知資訊集合與待確認資訊集合。

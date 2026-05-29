@@ -48,11 +48,11 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     monkeypatch.setattr(
         raw_request_module,
         "build_context_from_raw_input",
-        lambda user_input, history_context_summary=None: ContextEngineeringOutput(
+        lambda user_input, conversation_id=None: ContextEngineeringOutput(
             requirement_context="整理後摘要",
             known_information=[],
             pending_confirmation=[{"label": "time_budget", "question_hint": "每天能投入多久？"}],
-            history_context_summary=history_context_summary,
+            history_context_summary=None,
         ),
     )
     monkeypatch.setattr(

@@ -21,6 +21,7 @@
 - `conversation_pk`
 - `conversation_id`
 - `title`
+- `conversation_history_text`
 - `created_at`
 - `updated_at`
 
@@ -38,6 +39,12 @@
 - `title`
   - 對話標題。
   - 現階段可為空。
+
+- `conversation_history_text`
+  - 聚合後的完整對話歷史文字。
+  - 由 `Persistence Layer` 在每次新增 `turn_message` 後同步更新。
+  - 主要提供 `Context Engineering Module` 與後續模組直接取得歷史脈絡使用。
+  - 原始對話內容仍以 `conversation_turns` 與 `turn_messages` 為正式保存來源。
 
 - `created_at`
   - 對話建立時間。
@@ -128,3 +135,4 @@
 
 - `conversation_id` 與 `turn_id` 屬於跨層交換時使用的業務識別值
 - `conversation_pk`、`turn_pk`、`message_pk` 屬於資料庫內部主鍵，不直接暴露到對外契約
+- `conversation_history_text` 屬於聚合後的輔助欄位，用於降低上層模組重組完整歷史文字的成本

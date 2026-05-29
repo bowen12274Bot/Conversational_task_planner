@@ -36,6 +36,9 @@ class Conversation(Base):
         String(64), nullable=False, unique=True, index=True
     )
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conversation_history_text: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

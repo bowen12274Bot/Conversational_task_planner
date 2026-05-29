@@ -7,6 +7,11 @@ def test_build_context_from_raw_input_returns_structured_output_when_ai_returns_
 ) -> None:
     monkeypatch.setattr(
         context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: "user: 之前需求\nai: 之前回覆",
+    )
+    monkeypatch.setattr(
+        context_service,
         "run_ai_flow",
         lambda request: AIToModuleResult(
             success=True,
@@ -24,7 +29,8 @@ def test_build_context_from_raw_input_returns_structured_output_when_ai_returns_
     )
 
     result = context_service.build_context_from_raw_input(
-        "我想把這週的 API 串接工作排出來"
+        "我想把這週的 API 串接工作排出來",
+        conversation_id="conv-001",
     )
 
     assert result.requirement_context == "整理後摘要"
@@ -34,6 +40,7 @@ def test_build_context_from_raw_input_returns_structured_output_when_ai_returns_
     assert result.pending_confirmation == [
         {"label": "time_budget", "question_hint": "每天能投入多久？"}
     ]
+    assert result.history_context_summary == "user: 之前需求\nai: 之前回覆"
 
 
 def test_build_context_from_raw_input_raises_after_three_attempts_when_ai_returns_invalid_json_text(
@@ -58,9 +65,17 @@ def test_build_context_from_raw_input_raises_after_three_attempts_when_ai_return
         "run_ai_flow",
         fake_run_ai_flow,
     )
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
 
     try:
-        context_service.build_context_from_raw_input(user_input)
+        context_service.build_context_from_raw_input(
+            user_input,
+            conversation_id="conv-001",
+        )
     except ValueError as exc:
         assert "validation failed after 3 attempts" in str(exc)
         assert call_count["value"] == 3
@@ -75,6 +90,11 @@ def test_build_context_from_raw_input_raises_when_required_fields_are_missing(
     user_input = "我要整理資料庫報告"
     monkeypatch.setattr(
         context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        context_service,
         "run_ai_flow",
         lambda request: AIToModuleResult(
             success=True,
@@ -87,7 +107,10 @@ def test_build_context_from_raw_input_raises_when_required_fields_are_missing(
     )
 
     try:
-        context_service.build_context_from_raw_input(user_input)
+        context_service.build_context_from_raw_input(
+            user_input,
+            conversation_id="conv-001",
+        )
     except ValueError as exc:
         assert "validation failed after 3 attempts" in str(exc)
         return
@@ -99,6 +122,11 @@ def test_build_context_from_raw_input_raises_when_requirement_context_is_blank(
     monkeypatch,
 ) -> None:
     user_input = "我要整理資料庫報告"
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
     monkeypatch.setattr(
         context_service,
         "run_ai_flow",
@@ -115,7 +143,10 @@ def test_build_context_from_raw_input_raises_when_requirement_context_is_blank(
     )
 
     try:
-        context_service.build_context_from_raw_input(user_input)
+        context_service.build_context_from_raw_input(
+            user_input,
+            conversation_id="conv-001",
+        )
     except ValueError as exc:
         assert "validation failed after 3 attempts" in str(exc)
         return
@@ -126,6 +157,11 @@ def test_build_context_from_raw_input_raises_when_requirement_context_is_blank(
 def test_build_context_from_raw_input_raises_when_information_fields_are_not_lists(
     monkeypatch,
 ) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
     monkeypatch.setattr(
         context_service,
         "run_ai_flow",
@@ -143,7 +179,10 @@ def test_build_context_from_raw_input_raises_when_information_fields_are_not_lis
     )
 
     try:
-        context_service.build_context_from_raw_input("我要整理資料庫報告")
+        context_service.build_context_from_raw_input(
+            "我要整理資料庫報告",
+            conversation_id="conv-001",
+        )
     except ValueError as exc:
         assert "validation failed after 3 attempts" in str(exc)
         return
@@ -170,12 +209,54 @@ def test_build_context_from_raw_input_raises_when_ai_flow_fails_after_three_atte
         "run_ai_flow",
         fake_run_ai_flow,
     )
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
 
     try:
-        context_service.build_context_from_raw_input(user_input)
+        context_service.build_context_from_raw_input(
+            user_input,
+            conversation_id="conv-001",
+        )
     except ValueError as exc:
         assert "validation failed after 3 attempts" in str(exc)
         assert call_count["value"] == 3
         return
 
     raise AssertionError("Expected ValueError when ai flow keeps failing")
+
+
+def test_build_context_from_raw_input_skips_history_lookup_when_conversation_id_is_missing(
+    monkeypatch,
+) -> None:
+    history_call_count = {"value": 0}
+
+    def fake_get_history(conversation_id):
+        history_call_count["value"] += 1
+        return "should not be used"
+
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        fake_get_history,
+    )
+    monkeypatch.setattr(
+        context_service,
+        "run_ai_flow",
+        lambda request: AIToModuleResult(
+            success=True,
+            output_result={
+                "text": (
+                    '{"requirement_context":"整理後摘要","known_information":[],'
+                    '"pending_confirmation":[]}'
+                ),
+            },
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input("我要整理資料庫報告")
+
+    assert result.history_context_summary is None
+    assert history_call_count["value"] == 0

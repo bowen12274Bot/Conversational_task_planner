@@ -62,7 +62,7 @@
 - `pending_confirmation`
   - 尚未確認、但可能影響修改精度的資訊
 - `history_context_summary`
-  - 與本次修改相關的歷史脈絡摘要；現階段可先視為選用資料
+  - 與本次修改相關的歷史脈絡內容；現階段可先視為選用資料
 - `existing_plan`
   - 目前系統已有的既有規劃或排程結構
 - `revision_request`

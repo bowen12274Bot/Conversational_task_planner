@@ -92,7 +92,7 @@ class RawRequestController:
     def _run_stage_f003(self, context: RawRequestFlowContext) -> None:
         context.context_output = build_context_from_raw_input(
             user_input=context.request.user_input,
-            history_context_summary=None,
+            conversation_id=context.conversation_id,
         )
         self._transition(context, next_stage="F004")
 

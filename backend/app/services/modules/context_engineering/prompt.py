@@ -11,10 +11,16 @@ GROUP_NAME = "conversation_flow"
 CAPABILITY_LEVEL = "default"
 
 
-def build_context_engineering_ai_request(user_input: str) -> ModuleToAIRequest:
+def build_context_engineering_ai_request(
+    user_input: str,
+    conversation_history_text: str | None = None,
+) -> ModuleToAIRequest:
     """建立 Context Engineering 專用的 AI 請求資料。"""
 
-    prompt_spec = build_context_engineering_prompt_spec(user_input)
+    prompt_spec = build_context_engineering_prompt_spec(
+        user_input=user_input,
+        conversation_history_text=conversation_history_text,
+    )
 
     return ModuleToAIRequest(
         task_type=TASK_TYPE,
@@ -25,7 +31,10 @@ def build_context_engineering_ai_request(user_input: str) -> ModuleToAIRequest:
     )
 
 
-def build_context_engineering_prompt_spec(user_input: str) -> dict[str, Any]:
+def build_context_engineering_prompt_spec(
+    user_input: str,
+    conversation_history_text: str | None = None,
+) -> dict[str, Any]:
     """整理 Context Engineering 任務的 prompt 規格。"""
 
     normalized_input = user_input.strip()
@@ -34,7 +43,10 @@ def build_context_engineering_prompt_spec(user_input: str) -> dict[str, Any]:
 
     rules = _build_rules_text()
     task = _build_task_description()
-    context = _build_context_data(normalized_input)
+    context = _build_context_data(
+        user_input=normalized_input,
+        conversation_history_text=conversation_history_text,
+    )
     examples = _build_examples()
     output_target = _build_output_target()
 
@@ -126,12 +138,19 @@ def _build_task_description() -> str:
     )
 
 
-def _build_context_data(user_input: str) -> dict[str, Any]:
+def _build_context_data(
+    user_input: str,
+    conversation_history_text: str | None = None,
+) -> dict[str, Any]:
     """建立上下文層資料。"""
 
-    return {
+    context = {
         "raw_requirement": user_input,
     }
+    if conversation_history_text is not None and conversation_history_text.strip():
+        context["conversation_history_text"] = conversation_history_text.strip()
+
+    return context
 
 
 def _build_examples() -> list[dict[str, Any]]:

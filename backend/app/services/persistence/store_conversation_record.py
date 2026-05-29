@@ -67,6 +67,12 @@ def store_conversation_record(
             content=request.content,
         )
         db.add(message)
+        db.flush()
+
+        conversation.conversation_history_text = _build_conversation_history_text(
+            db=db,
+            conversation_pk=conversation.conversation_pk,
+        )
         db.commit()
 
         return ConversationRecordStoreResult(
@@ -78,3 +84,33 @@ def store_conversation_record(
         raise
     finally:
         db.close()
+
+
+def _build_conversation_history_text(db, conversation_pk: int) -> str | None:
+    """依現有 turn/message 順序重建完整對話歷史文字。"""
+
+    rows = db.execute(
+        select(
+            TurnMessageModel.type,
+            TurnMessageModel.content,
+        )
+        .join(
+            ConversationTurnModel,
+            TurnMessageModel.turn_pk == ConversationTurnModel.turn_pk,
+        )
+        .where(ConversationTurnModel.conversation_pk == conversation_pk)
+        .order_by(
+            ConversationTurnModel.created_at,
+            TurnMessageModel.message_index,
+            TurnMessageModel.created_at,
+        )
+    ).all()
+
+    history_lines = [
+        f"{message_type}: {content}"
+        for message_type, content in rows
+    ]
+    if not history_lines:
+        return None
+
+    return "\n".join(history_lines)

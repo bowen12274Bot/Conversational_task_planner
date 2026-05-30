@@ -10,7 +10,11 @@ from app.schemas import (
 )
 from app.services.modules.context_engineering import build_context_from_raw_input
 from app.services.modules.questioning import evaluate_questioning_need
-from app.services.persistence import store_conversation_record
+from app.services.persistence import (
+    increment_follow_up_round_count,
+    reset_follow_up_round_count,
+    store_conversation_record,
+)
 from app.services.modules.response import build_response_from_questioning
 
 
@@ -119,6 +123,7 @@ class RawRequestController:
         if context.questioning_decision is None:
             raise ValueError("questioning_decision 尚未建立。")
 
+        increment_follow_up_round_count(context.conversation_id)
         context.response_output = build_response_from_questioning(
             questioning_decision=context.questioning_decision,
         )
@@ -149,6 +154,7 @@ class RawRequestController:
         self,
         context: RawRequestFlowContext,
     ) -> ControllerToFrontendResponse:
+        reset_follow_up_round_count(context.conversation_id)
         # 因規劃分支尚未細化設計，F008-F012 目前先以簡略骨架表示。
         for stage in ("F009", "F010", "F011", "F012"):
             context.traversed_history.append(stage)

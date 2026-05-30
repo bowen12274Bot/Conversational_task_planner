@@ -23,6 +23,7 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     monkeypatch,
 ) -> None:
     stored_records: list[dict[str, str | None]] = []
+    follow_up_counter_calls: list[str] = []
 
     def fake_store(record):
         stored_records.append(
@@ -45,6 +46,11 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
         )
 
     monkeypatch.setattr(raw_request_module, "store_conversation_record", fake_store)
+    monkeypatch.setattr(
+        raw_request_module,
+        "increment_follow_up_round_count",
+        lambda conversation_id: follow_up_counter_calls.append(conversation_id),
+    )
     monkeypatch.setattr(
         raw_request_module,
         "build_context_from_raw_input",
@@ -101,3 +107,62 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
             "content": "請先補充每天可投入的時間。",
         },
     ]
+    assert follow_up_counter_calls == ["conv-001"]
+
+
+def test_raw_request_resets_follow_up_round_count_when_entering_planning(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    reset_calls: list[str] = []
+
+    monkeypatch.setattr(
+        raw_request_module,
+        "store_conversation_record",
+        lambda record: SimpleNamespace(
+            conversation_id=record.conversation_id,
+            turn_id="turn-001",
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_context_from_raw_input",
+        lambda user_input, conversation_id=None: ContextEngineeringOutput(
+            requirement_context="整理後摘要",
+            known_information=[
+                {"label": "task_type", "value": "Java 作業"},
+                {"label": "deadline_hint", "value": "7 天內"},
+            ],
+            pending_confirmation=[],
+            history_context_summary=None,
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "evaluate_questioning_need",
+        lambda context_output: QuestioningDecision(
+            is_ready_for_planning=True,
+            reasoning="資訊足夠，可進入規劃。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "reset_follow_up_round_count",
+        lambda conversation_id: reset_calls.append(conversation_id),
+    )
+
+    response = client.post(
+        "/api/raw-request",
+        json={
+            "conversation_id": "conv-002",
+            "user_input": "我想把 Java 作業在 7 天內做完",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["conversation_id"] == "conv-002"
+    assert "規劃分支流程骨架已預留" in body["reply_text"]
+    assert reset_calls == ["conv-002"]

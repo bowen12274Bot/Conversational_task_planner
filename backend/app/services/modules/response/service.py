@@ -11,6 +11,9 @@ def build_response_from_questioning(
 ) -> ResponseOutput:
     """根據 questioning 判斷結果生成對前端可顯示的自然語言回覆。"""
 
+    if questioning_decision.decision != "follow_up":
+        raise ValueError("僅能對 follow_up decision 生成追問回覆。")
+
     reasoning = questioning_decision.reasoning.strip()
     if not reasoning:
         raise ValueError("questioning_decision.reasoning 不可為空白。")
@@ -74,6 +77,24 @@ def _build_fallback_follow_up_response(
     """當 AI 回覆不可用時，建立最小追問回覆。"""
 
     question_hints: list[str] = []
+    for guidance in questioning_decision.next_step_guidance:
+        normalized_guidance = guidance.strip()
+        if normalized_guidance:
+            question_hints.append(normalized_guidance)
+        if len(question_hints) >= 2:
+            break
+
+    if question_hints:
+        reply_text = (
+            "為了幫你安排得更準確，我想先確認兩件事："
+            + "？".join(question_hints).rstrip("？")
+            + "？"
+        )
+        return ResponseOutput(
+            reply_text=reply_text,
+            response_type="follow_up_question",
+        )
+
     for item in questioning_decision.pending_confirmation:
         question_hint = item.get("question_hint")
         if isinstance(question_hint, str) and question_hint.strip():

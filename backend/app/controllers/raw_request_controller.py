@@ -11,6 +11,7 @@ from app.schemas import (
 from app.services.modules.context_engineering import build_context_from_raw_input
 from app.services.modules.questioning import evaluate_questioning_need
 from app.services.persistence import (
+    get_follow_up_round_count,
     increment_follow_up_round_count,
     reset_follow_up_round_count,
     store_conversation_record,
@@ -104,8 +105,10 @@ class RawRequestController:
         if context.context_output is None:
             raise ValueError("context_output 尚未建立。")
 
+        follow_up_round_count = get_follow_up_round_count(context.conversation_id)
         context.questioning_decision = evaluate_questioning_need(
             context_output=context.context_output,
+            follow_up_round_count=follow_up_round_count,
         )
         self._transition(context, next_stage="F005")
 
@@ -113,7 +116,7 @@ class RawRequestController:
         if context.questioning_decision is None:
             raise ValueError("questioning_decision 尚未建立。")
 
-        if context.questioning_decision.is_ready_for_planning:
+        if context.questioning_decision.decision == "planning":
             self._transition(context, next_stage="F008")
             return
 

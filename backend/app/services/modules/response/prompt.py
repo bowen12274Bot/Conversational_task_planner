@@ -38,9 +38,11 @@ def build_follow_up_response_prompt_spec(
             "rules": _build_rules_text(),
             "task": _build_task_text(),
             "context": {
+                "decision": questioning_decision.decision,
                 "reasoning": reasoning,
                 "known_information": questioning_decision.known_information,
                 "pending_confirmation": questioning_decision.pending_confirmation,
+                "next_step_guidance": questioning_decision.next_step_guidance,
             },
             "examples": _build_examples(),
             "output_target": _build_output_target(),
@@ -73,7 +75,8 @@ def _build_examples() -> list[dict[str, str]]:
         {
             "input_summary": (
                 "reasoning: 目前需求是希望在7天內完成Java作業。"
-                "但目前仍缺少目前進度、可投入時間。"
+                "但目前仍缺少目前進度、可投入時間。 "
+                "next_step_guidance: 目前作業已經完成到哪裡？ 每天大約可以投入多少時間？"
             ),
             "output_example": (
                 "為了幫你排出比較可行的進度，我想先確認兩件事："

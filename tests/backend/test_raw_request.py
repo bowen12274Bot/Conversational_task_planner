@@ -53,6 +53,11 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     )
     monkeypatch.setattr(
         raw_request_module,
+        "get_follow_up_round_count",
+        lambda conversation_id: 0,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
         "build_context_from_raw_input",
         lambda user_input, conversation_id=None: ContextEngineeringOutput(
             requirement_context="整理後摘要",
@@ -64,11 +69,12 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     monkeypatch.setattr(
         raw_request_module,
         "evaluate_questioning_need",
-        lambda context_output: QuestioningDecision(
-            is_ready_for_planning=False,
+        lambda context_output, follow_up_round_count: QuestioningDecision(
+            decision="follow_up",
             reasoning="資訊不足，需要追問。",
             known_information=context_output.known_information,
             pending_confirmation=context_output.pending_confirmation,
+            next_step_guidance=["每天大約可以投入多少時間？"],
         ),
     )
     monkeypatch.setattr(
@@ -126,6 +132,11 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     )
     monkeypatch.setattr(
         raw_request_module,
+        "get_follow_up_round_count",
+        lambda conversation_id: 1,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
         "build_context_from_raw_input",
         lambda user_input, conversation_id=None: ContextEngineeringOutput(
             requirement_context="整理後摘要",
@@ -140,11 +151,12 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     monkeypatch.setattr(
         raw_request_module,
         "evaluate_questioning_need",
-        lambda context_output: QuestioningDecision(
-            is_ready_for_planning=True,
+        lambda context_output, follow_up_round_count: QuestioningDecision(
+            decision="planning",
             reasoning="資訊足夠，可進入規劃。",
             known_information=context_output.known_information,
             pending_confirmation=context_output.pending_confirmation,
+            next_step_guidance=["可先進行初步規劃。"],
         ),
     )
     monkeypatch.setattr(

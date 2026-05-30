@@ -26,14 +26,16 @@ class ContextEngineeringOutput(BaseModel):
 class QuestioningDecision(BaseModel):
     """由 `Questioning Module` 根據 `Context Engineering` 整理結果所產出的判斷資料。"""
 
-    # 目前資訊是否已足以開始規劃。
-    is_ready_for_planning: bool
+    # 本輪下一步應採取的方向。
+    decision: Literal["follow_up", "planning"]
     # 對此判斷的原因說明。
     reasoning: str = Field(..., min_length=1)
     # 延用目前已知資訊集合。
     known_information: list[dict[str, Any]] = Field(default_factory=list)
     # 延用目前待確認資訊集合。
     pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    # 下一步建議內容，依 decision 語意解讀。
+    next_step_guidance: list[str] = Field(default_factory=list)
 
 
 class ResponseOutput(BaseModel):

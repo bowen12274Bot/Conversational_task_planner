@@ -23,12 +23,14 @@ def test_frontend_request_contract_accepts_minimal_payload() -> None:
 
 def test_questioning_decision_contract_represents_not_ready_state() -> None:
     decision = QuestioningDecision(
-        is_ready_for_planning=False,
+        decision="follow_up",
         reasoning="目前缺少截止時間與每日可投入時間。",
+        next_step_guidance=["預計什麼時候要完成？"],
     )
 
-    assert decision.is_ready_for_planning is False
+    assert decision.decision == "follow_up"
     assert decision.pending_confirmation == []
+    assert decision.next_step_guidance == ["預計什麼時候要完成？"]
 
 
 def test_controller_response_contract_keeps_minimal_output_shape() -> None:

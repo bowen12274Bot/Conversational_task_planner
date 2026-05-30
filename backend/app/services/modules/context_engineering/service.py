@@ -135,18 +135,7 @@ def _parse_context_engineering_text(text_output: str) -> dict[str, Any] | None:
     if not normalized_text:
         return None
 
-    try:
-        parsed_output = json.loads(normalized_text)
-    except json.JSONDecodeError:
-        return None
-
-    if not isinstance(parsed_output, dict):
-        return None
-
-    if not _looks_like_context_engineering_output(parsed_output):
-        return None
-
-    return parsed_output
+    return _extract_last_context_engineering_json_object(normalized_text)
 
 
 def _strip_markdown_code_fence(text_output: str) -> str:
@@ -191,3 +180,38 @@ def _collect_information_list(value: Any) -> list[dict[str, Any]]:
             collected_items.append(item)
 
     return collected_items
+
+
+def _extract_last_context_engineering_json_object(
+    text_output: str,
+) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    candidates: list[dict[str, Any]] = []
+
+    try:
+        parsed_output = json.loads(text_output)
+    except json.JSONDecodeError:
+        parsed_output = None
+    else:
+        if isinstance(parsed_output, dict) and _looks_like_context_engineering_output(
+            parsed_output
+        ):
+            return parsed_output
+
+    for start_index in range(len(text_output) - 1, -1, -1):
+        if text_output[start_index] != "{":
+            continue
+
+        try:
+            candidate, _ = decoder.raw_decode(text_output[start_index:])
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(candidate, dict):
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        if _looks_like_context_engineering_output(candidate):
+            return candidate
+
+    return None

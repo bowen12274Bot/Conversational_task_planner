@@ -50,6 +50,49 @@ def test_build_context_from_raw_input_returns_structured_output_when_ai_returns_
     assert result.history_context_summary == "user: 之前需求\nai: 之前回覆"
 
 
+def test_build_context_from_raw_input_can_extract_last_json_object_after_analysis_text(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        context_service,
+        "run_ai_flow",
+        lambda request: AIToModuleResult(
+            success=True,
+            output_result={
+                "text": (
+                    "*   Analysis before final answer.\n"
+                    "*   The model is thinking aloud.\n"
+                    "{\n"
+                    '  "requirement_context": "整理後摘要",\n'
+                    '  "known_information": [{"label":"task_type","value":"API 串接"}],\n'
+                    '  "pending_confirmation": [{"label":"time_budget","question_hint":"每天能投入多久？"}]\n'
+                    "}"
+                ),
+                "provider": "mock",
+                "model_name": "mock-model",
+            },
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "我想把這週的 API 串接工作排出來",
+        conversation_id="conv-001",
+    )
+
+    assert result.requirement_context == "整理後摘要"
+    assert result.known_information == [
+        {"label": "task_type", "value": "API 串接"}
+    ]
+    assert result.pending_confirmation == [
+        {"label": "time_budget", "question_hint": "每天能投入多久？"}
+    ]
+
+
 def test_build_context_from_raw_input_raises_after_three_attempts_when_ai_returns_invalid_json_text(
     monkeypatch,
 ) -> None:

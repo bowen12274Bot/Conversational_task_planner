@@ -50,12 +50,74 @@ def _extract_response_text(ai_result: AIToModuleResult) -> str | None:
     if isinstance(output_result, dict):
         text = output_result.get("text")
         if isinstance(text, str) and text.strip():
-            return text.strip()
+            return _extract_final_reply_text(text)
 
     if isinstance(output_result, str) and output_result.strip():
-        return output_result.strip()
+        return _extract_final_reply_text(output_result)
 
     return None
+
+
+def _extract_final_reply_text(reply_text: str) -> str | None:
+    normalized_text = reply_text.strip()
+    if not normalized_text:
+        return None
+
+    lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+    if not lines:
+        return None
+
+    for line in reversed(lines):
+        candidate = _normalize_reply_candidate(line)
+        if _looks_like_final_reply(candidate):
+            return candidate
+
+    candidate = _normalize_reply_candidate(lines[-1])
+    return candidate or None
+
+
+def _normalize_reply_candidate(value: str) -> str:
+    normalized = value.strip().strip('"').strip("'").strip()
+    if normalized.startswith("*"):
+        normalized = normalized.lstrip("*").strip()
+    return normalized
+
+
+def _looks_like_final_reply(value: str) -> bool:
+    if not value:
+        return False
+
+    lowered = value.lower()
+    blocked_prefixes = (
+        "helpful planning assistant",
+        "natural traditional chinese",
+        "generate a short follow-up reply",
+        "final polish",
+        "draft",
+        "constraint",
+        "reasoning",
+        "next_step_guidance",
+        "input",
+        "output",
+        "wait,",
+        "applying this style",
+        "example style",
+        "this looks perfect",
+    )
+    if lowered.startswith(blocked_prefixes):
+        return False
+
+    if "`" in value or "{" in value or "}" in value:
+        return False
+
+    if ":" in value and all(ord(ch) < 128 for ch in value[: min(len(value), 24)]):
+        return False
+
+    question_marks = value.count("？") + value.count("?")
+    if question_marks == 0:
+        return False
+
+    return True
 
 
 def _is_usable_response_text(reply_text: str | None) -> bool:

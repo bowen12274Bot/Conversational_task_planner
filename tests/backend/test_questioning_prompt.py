@@ -23,6 +23,9 @@ def test_build_questioning_ai_request_contains_expected_sections() -> None:
     )
     assert request.input_data["examples"]
     assert request.input_data["output_target"]
+    assert "one raw JSON object only" in request.input_data["rules"]
+    assert "without any additional commentary" in request.input_data["task"]
+    assert "start with '{' and end with '}'" in request.input_data["output_target"]
 
 
 def test_build_questioning_ai_request_contains_format_requirements() -> None:
@@ -41,6 +44,8 @@ def test_build_questioning_ai_request_contains_format_requirements() -> None:
         "pending_confirmation",
         "next_step_guidance",
     ]
+    assert "Return exactly one JSON object and nothing else." in request.format_requirements["requirements"]
+    assert "Do not output analysis, thinking process, bullet points, markdown, or code fences." in request.format_requirements["requirements"]
 
 
 def test_build_questioning_prompt_spec_rejects_blank_requirement_context() -> None:

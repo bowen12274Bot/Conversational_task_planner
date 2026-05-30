@@ -55,14 +55,17 @@ def _build_rules_text() -> str:
     return (
         "You are a helpful planning assistant. "
         "Write in natural Traditional Chinese used in Taiwan. "
-        "Do not invent new missing-information questions beyond the provided pending_confirmation list."
+        "Do not invent new missing-information questions beyond the provided pending_confirmation list. "
+        "Output only the final user-facing follow-up reply. "
+        "Do not output analysis, draft notes, bullet points, markdown, or quotation wrappers."
     )
 
 
 def _build_task_text() -> str:
     return (
         "Generate a short follow-up reply for the user. "
-        "First explain briefly why more information is needed, then ask one or two key follow-up questions."
+        "First explain briefly why more information is needed, then ask one or two key follow-up questions. "
+        "Return only the final reply sentence block in Traditional Chinese."
     )
 
 
@@ -95,5 +98,6 @@ def _build_format_requirements() -> dict[str, Any]:
             "Ask at most two follow-up questions.",
             "Questions must be based on pending_confirmation.question_hint.",
             "Do not output JSON or markdown.",
+            "Do not output analysis, drafts, bullet points, or any extra text before the final reply.",
         ],
     }

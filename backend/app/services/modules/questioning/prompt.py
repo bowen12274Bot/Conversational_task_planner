@@ -69,6 +69,9 @@ def _build_rules_text() -> str:
     return (
         "You are a pre-planning decision assistant. "
         "Your job is to decide whether the next step should be follow_up or planning. "
+        "Your response must be one raw JSON object only. "
+        "Do not output analysis, reasoning steps, bullet points, markdown, code fences, labels, or any text before or after the JSON object. "
+        "Do not restate the input. "
         "Share the same requirement labels as the Context Engineering Module. "
         "Treat task_type and deadline_hint as the minimum planning basis. "
         "Treat current_progress, time_budget, difficulty, and constraint as contextual signals rather than always-required items. "
@@ -84,14 +87,16 @@ def _build_task_text() -> str:
         "Read requirement_context, known_information, pending_confirmation, and follow_up_round_count. "
         "Decide whether the next action should be follow_up or planning. "
         "If follow_up is needed, provide a small number of high-value next-step questions. "
-        "If planning is appropriate, explain why the current information is sufficient for initial planning and describe how the remaining uncertainty may be handled conservatively."
+        "If planning is appropriate, explain why the current information is sufficient for initial planning and describe how the remaining uncertainty may be handled conservatively. "
+        "Return the final answer directly as one valid JSON object without any additional commentary."
     )
 
 
 def _build_output_target() -> str:
     return (
         "Return one JSON object containing decision, reasoning, known_information, "
-        "pending_confirmation, and next_step_guidance."
+        "pending_confirmation, and next_step_guidance. "
+        "The output must start with '{' and end with '}'."
     )
 
 
@@ -237,7 +242,9 @@ def _build_format_requirements() -> dict[str, Any]:
             "pending_confirmation must be a list of objects.",
             "next_step_guidance must be a list of Traditional Chinese strings.",
             "Use only requirement labels from the allowed set.",
-            "Do not output markdown or extra text outside the JSON object.",
+            "Return exactly one JSON object and nothing else.",
+            "Do not output analysis, thinking process, bullet points, markdown, or code fences.",
+            "Do not output any extra text outside the JSON object.",
         ],
         "allowed_labels": {
             "values": list(ALLOWED_REQUIREMENT_LABELS),

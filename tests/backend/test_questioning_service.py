@@ -141,3 +141,37 @@ def test_evaluate_questioning_need_can_still_follow_up_when_pending_is_empty_wit
 
     assert result.decision == "follow_up"
     assert result.next_step_guidance
+
+
+def test_parse_questioning_text_can_extract_last_json_object_after_analysis() -> None:
+    raw_output = """
+*   Role: Pre-planning decision assistant.
+*   This model is thinking aloud before the final answer.
+*   JSON only? Yes.
+{
+  "decision": "follow_up",
+  "reasoning": "目前任務內容已知，但期限尚未明確，未達到最小規劃基礎，因此應先追問期限以確保規劃方向正確。",
+  "known_information": [
+    {
+      "label": "task_type",
+      "value": "Java 作業"
+    }
+  ],
+  "pending_confirmation": [
+    {
+      "label": "deadline_hint",
+      "question_hint": "預計什麼時候要完成？"
+    }
+  ],
+  "next_step_guidance": [
+    "預計什麼時候要完成這份 Java 作業？"
+  ]
+}
+""".strip()
+
+    parsed = questioning_service._parse_questioning_text(raw_output)
+
+    assert parsed is not None
+    assert parsed["decision"] == "follow_up"
+    assert parsed["known_information"][0]["label"] == "task_type"
+    assert parsed["pending_confirmation"][0]["label"] == "deadline_hint"

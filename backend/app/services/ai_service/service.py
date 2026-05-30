@@ -1,3 +1,6 @@
+from datetime import datetime
+from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from app.schemas import (
@@ -19,6 +22,18 @@ from app.services.ai_service.prompt import (
 )
 
 DEFAULT_PROVIDER_ORDER = ("ai_studio", "openrouter")
+DEBUG_LOG_PATH = Path(__file__).resolve().parents[4] / ".private" / "ai_service_debug.log"
+
+
+def _append_ai_service_debug_log(message: str) -> None:
+    try:
+        DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with DEBUG_LOG_PATH.open("a", encoding="utf-8") as log_file:
+            timestamp = datetime.now().isoformat(timespec="seconds")
+            log_file.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        # Debug logging must never break the main AI flow.
+        return
 
 
 def select_capability_level_model_config(
@@ -164,6 +179,7 @@ def run_ai_flow(
 
     for current_model in model_chain:
         provider_id = str(current_model.get("provider", "")).strip()
+        model_name = str(current_model.get("model_name", "")).strip()
         execution_config = ProviderExecutionConfig(
             provider_id=provider_id,
             base_url=get_provider_base_url(
@@ -195,8 +211,30 @@ def run_ai_flow(
             execution_config=execution_config,
         )
 
+        attempt_started_at = perf_counter()
+        _append_ai_service_debug_log(
+            "attempt_start "
+            f"task_type={request.task_type} "
+            f"group_name={request.group_name} "
+            f"capability_level={request.capability_level} "
+            f"provider={provider_id} "
+            f"model={model_name}"
+        )
         last_result = run_single_model(
             provider_request_data=provider_request_data,
+        )
+        elapsed_seconds = perf_counter() - attempt_started_at
+        _append_ai_service_debug_log(
+            "attempt_end "
+            f"task_type={request.task_type} "
+            f"group_name={request.group_name} "
+            f"capability_level={request.capability_level} "
+            f"provider={provider_id} "
+            f"model={model_name} "
+            f"success={last_result.success} "
+            f"error_stage={last_result.error_stage} "
+            f"error_message={last_result.error_message!r} "
+            f"elapsed_seconds={elapsed_seconds:.2f}"
         )
         if last_result.success:
             return last_result

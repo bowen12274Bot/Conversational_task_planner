@@ -1,17 +1,35 @@
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
 
 from app.schemas import (
     ContextEngineeringOutput,
     ControllerToFrontendResponse,
     ConversationRecordStoreRequest,
     FrontendToControllerRequest,
+    PlanningCreateInput,
+    PlanningCreateOutput,
+    PlanningResponseInput,
     QuestioningDecision,
     ResponseOutput,
 )
 from app.services.modules.context_engineering import build_context_from_raw_input
+from app.services.modules.planning import build_initial_planning
 from app.services.modules.questioning import evaluate_questioning_need
-from app.services.persistence import store_conversation_record
-from app.services.modules.response import build_response_from_questioning
+from app.services.modules.output_structuring.service import (
+    build_structured_task_output,
+)
+from app.services.persistence import (
+    get_follow_up_round_count,
+    increment_follow_up_round_count,
+    reset_follow_up_round_count,
+    save_structured_task_output,
+    store_conversation_record,
+)
+from app.services.modules.response import (
+    build_response_from_planning,
+    build_response_from_questioning,
+)
 
 
 RAW_REQUEST_START_STAGE = "F001"
@@ -28,6 +46,10 @@ class RawRequestFlowContext:
     context_output: ContextEngineeringOutput | None = None
     questioning_decision: QuestioningDecision | None = None
     response_output: ResponseOutput | None = None
+    planning_input: PlanningCreateInput | None = None
+    planning_output: PlanningCreateOutput | None = None
+    structured_task_output: dict[str, Any] | None = None
+    reply_created_at: datetime | None = None
     current_stage: str = RAW_REQUEST_START_STAGE
     traversed_history: list[str] = field(
         default_factory=lambda: [RAW_REQUEST_START_STAGE]
@@ -62,7 +84,11 @@ class RawRequestController:
             "F005": self._run_stage_f005,
             "F006": self._run_stage_f006,
             "F007": self._run_stage_f007,
-            "F008": self._run_stage_f008_to_f012,
+            "F008": self._run_stage_f008,
+            "F009": self._run_stage_f009,
+            "F010": self._run_stage_f010,
+            "F011": self._run_stage_f011,
+            "F012": self._run_stage_f012,
         }
 
         while True:
@@ -92,7 +118,7 @@ class RawRequestController:
     def _run_stage_f003(self, context: RawRequestFlowContext) -> None:
         context.context_output = build_context_from_raw_input(
             user_input=context.request.user_input,
-            history_context_summary=None,
+            conversation_id=context.conversation_id,
         )
         self._transition(context, next_stage="F004")
 
@@ -100,8 +126,10 @@ class RawRequestController:
         if context.context_output is None:
             raise ValueError("context_output 尚未建立。")
 
+        follow_up_round_count = get_follow_up_round_count(context.conversation_id)
         context.questioning_decision = evaluate_questioning_need(
             context_output=context.context_output,
+            follow_up_round_count=follow_up_round_count,
         )
         self._transition(context, next_stage="F005")
 
@@ -109,7 +137,7 @@ class RawRequestController:
         if context.questioning_decision is None:
             raise ValueError("questioning_decision 尚未建立。")
 
-        if context.questioning_decision.is_ready_for_planning:
+        if context.questioning_decision.decision == "planning":
             self._transition(context, next_stage="F008")
             return
 
@@ -119,16 +147,20 @@ class RawRequestController:
         if context.questioning_decision is None:
             raise ValueError("questioning_decision 尚未建立。")
 
+        increment_follow_up_round_count(context.conversation_id)
         context.response_output = build_response_from_questioning(
             questioning_decision=context.questioning_decision,
         )
-        store_conversation_record(
+        store_result = store_conversation_record(
             ConversationRecordStoreRequest(
                 conversation_id=context.conversation_id,
                 turn_id=context.turn_id,
                 type="ai",
                 content=context.response_output.reply_text,
             )
+        )
+        context.reply_created_at = self._normalize_utc_timestamp(
+            store_result.message_created_at
         )
         self._transition(context, next_stage="F007")
 
@@ -141,25 +173,84 @@ class RawRequestController:
 
         return ControllerToFrontendResponse(
             reply_text=context.response_output.reply_text,
+            reply_created_at=context.reply_created_at,
             conversation_id=context.conversation_id,
             structured_task_output=None,
         )
 
-    def _run_stage_f008_to_f012(
+    def _run_stage_f008(self, context: RawRequestFlowContext) -> None:
+        reset_follow_up_round_count(context.conversation_id)
+        if context.context_output is None:
+            raise ValueError("context_output 尚未建立。")
+
+        context.planning_input = PlanningCreateInput(
+            requirement_context=context.context_output.requirement_context,
+            known_information=context.context_output.known_information,
+            pending_confirmation=context.context_output.pending_confirmation,
+            conversation_history_text=context.context_output.conversation_history_text,
+        )
+        self._transition(context, next_stage="F009")
+
+    def _run_stage_f009(self, context: RawRequestFlowContext) -> None:
+        if context.planning_input is None:
+            raise ValueError("planning_input 尚未建立。")
+
+        context.planning_output = build_initial_planning(context.planning_input)
+        self._transition(context, next_stage="F010")
+
+    def _run_stage_f010(self, context: RawRequestFlowContext) -> None:
+        if context.planning_output is None:
+            raise ValueError("planning_output 尚未建立。")
+
+        self._transition(context, next_stage="F011")
+
+    def _run_stage_f011(self, context: RawRequestFlowContext) -> None:
+        if context.planning_output is None:
+            raise ValueError("planning_output 尚未建立。")
+        if context.context_output is None:
+            raise ValueError("context_output 尚未建立。")
+
+        structured_task_output = build_structured_task_output(
+            context.planning_output,
+            known_information=context.context_output.known_information,
+            current_datetime=datetime.now(timezone.utc),
+        )
+        context.structured_task_output = structured_task_output.model_dump()
+        save_structured_task_output(
+            context.conversation_id, context.structured_task_output
+        )
+        context.response_output = build_response_from_planning(
+            PlanningResponseInput(
+                plan_summary=context.planning_output.plan_summary,
+                design_rationale=context.planning_output.design_rationale,
+                structured_task_output=structured_task_output,
+            )
+        )
+        store_result = store_conversation_record(
+            ConversationRecordStoreRequest(
+                conversation_id=context.conversation_id,
+                turn_id=context.turn_id,
+                type="ai",
+                content=context.response_output.reply_text,
+            )
+        )
+        context.reply_created_at = self._normalize_utc_timestamp(
+            store_result.message_created_at
+        )
+        self._transition(context, next_stage="F012")
+
+    def _run_stage_f012(
         self,
         context: RawRequestFlowContext,
     ) -> ControllerToFrontendResponse:
-        # 因規劃分支尚未細化設計，F008-F012 目前先以簡略骨架表示。
-        for stage in ("F009", "F010", "F011", "F012"):
-            context.traversed_history.append(stage)
-        context.current_stage = "F012"
+        if context.response_output is None:
+            raise ValueError("response_output 尚未建立。")
+
         return ControllerToFrontendResponse(
-            reply_text=(
-                "目前 raw_request 規劃分支流程骨架已預留，"
-                "但尚未接入實際規劃與輸出模組。"
-            ),
+            reply_text=context.response_output.reply_text,
+            reply_created_at=context.reply_created_at,
             conversation_id=context.conversation_id,
-            structured_task_output=None,
+            structured_task_output=context.structured_task_output,
         )
 
     def _transition(
@@ -175,3 +266,11 @@ class RawRequestController:
 
         if stage not in RAW_REQUEST_ALLOWED_END_STAGES:
             raise ValueError(f"raw_request flow ended at invalid stage: {stage}")
+
+    def _normalize_utc_timestamp(self, value: datetime) -> datetime:
+        """將回覆訊息時間標準化為帶時區資訊的 UTC。"""
+
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc)
+
+        return value.replace(tzinfo=timezone.utc)

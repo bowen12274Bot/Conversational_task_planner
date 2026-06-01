@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -19,6 +20,8 @@ class ControllerToFrontendResponse(BaseModel):
 
     # 顯示給使用者的回覆文字。
     reply_text: str = Field(..., min_length=1)
+    # 本輪 AI 回覆訊息的建立時間。
+    reply_created_at: datetime | None = None
     # 本輪互動所屬的對話識別值。
     conversation_id: str | None = Field(default=None, min_length=1)
     # 已完成整理、可提供前端顯示的任務排版資料。

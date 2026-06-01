@@ -1,7 +1,9 @@
 from typing import Any
 
 from app.schemas import ModuleToAIRequest
-from app.services.modules.context_engineering.labels import ALLOWED_LABELS
+from app.services.modules.shared.requirement_labels import (
+    ALLOWED_REQUIREMENT_LABELS,
+)
 
 
 TASK_TYPE = "context_engineering"
@@ -9,10 +11,16 @@ GROUP_NAME = "conversation_flow"
 CAPABILITY_LEVEL = "default"
 
 
-def build_context_engineering_ai_request(user_input: str) -> ModuleToAIRequest:
+def build_context_engineering_ai_request(
+    user_input: str,
+    conversation_history_text: str | None = None,
+) -> ModuleToAIRequest:
     """建立 Context Engineering 專用的 AI 請求資料。"""
 
-    prompt_spec = build_context_engineering_prompt_spec(user_input)
+    prompt_spec = build_context_engineering_prompt_spec(
+        user_input=user_input,
+        conversation_history_text=conversation_history_text,
+    )
 
     return ModuleToAIRequest(
         task_type=TASK_TYPE,
@@ -23,7 +31,10 @@ def build_context_engineering_ai_request(user_input: str) -> ModuleToAIRequest:
     )
 
 
-def build_context_engineering_prompt_spec(user_input: str) -> dict[str, Any]:
+def build_context_engineering_prompt_spec(
+    user_input: str,
+    conversation_history_text: str | None = None,
+) -> dict[str, Any]:
     """整理 Context Engineering 任務的 prompt 規格。"""
 
     normalized_input = user_input.strip()
@@ -32,7 +43,10 @@ def build_context_engineering_prompt_spec(user_input: str) -> dict[str, Any]:
 
     rules = _build_rules_text()
     task = _build_task_description()
-    context = _build_context_data(normalized_input)
+    context = _build_context_data(
+        user_input=normalized_input,
+        conversation_history_text=conversation_history_text,
+    )
     examples = _build_examples()
     output_target = _build_output_target()
 
@@ -51,7 +65,7 @@ def build_context_engineering_prompt_spec(user_input: str) -> dict[str, Any]:
 def _build_input_data(
     rules: str,
     task: str,
-    context: dict[str, Any],
+    context: str,
     examples: list[dict[str, Any]],
     output_target: str,
 ) -> dict[str, Any]:
@@ -71,7 +85,8 @@ def _build_output_target() -> str:
 
     return (
         "Analyze the user's raw requirement and organize it into "
-        "requirement_context, known_information, and pending_confirmation."
+        "requirement_context, known_information, and pending_confirmation "
+        "for the current turn."
     )
 
 
@@ -86,16 +101,16 @@ def _build_format_requirements() -> dict[str, Any]:
             "pending_confirmation",
         ],
         "requirements": [
-            "requirement_context must be a concise string summary of the user's requirement.",
-            "known_information must be a list of objects containing only information clearly supported by the user's input.",
-            "pending_confirmation must be a list of objects for important missing or unclear information that should be clarified later.",
+            "requirement_context must be a concise string summary of the current requirement and current situation.",
+            "known_information must be a list of objects containing only information clearly supported by the current raw requirement or prior user messages that are still relevant.",
+            "pending_confirmation must be a list of objects for important missing, unclear, or conflicting information that should be clarified later.",
             "Use label and value for each known_information item.",
             "Use label and question_hint for each pending_confirmation item.",
             "Do not invent deadlines, progress, constraints, or difficulties that were not stated by the user.",
             "Return an empty list when there is no suitable item for known_information or pending_confirmation.",
         ],
         "allowed_labels": {
-            "values": list(ALLOWED_LABELS),
+            "values": list(ALLOWED_REQUIREMENT_LABELS),
             "guidance": (
                 "You must use only labels from this allowed set. "
                 "Do not create new labels."
@@ -109,7 +124,10 @@ def _build_rules_text() -> str:
 
     return (
         "You are a requirement analysis assistant. "
-        "Only extract information that is supported by the user's input. "
+        "Use the current raw requirement as the primary input for this turn. "
+        "Use prior conversation history to help interpret the current turn and preserve relevant known_information and pending_confirmation continuity. "
+        "When deciding confirmed information, prioritize content clearly supported by user messages, "
+        "and treat prior AI replies as contextual references rather than independent confirmed facts. "
         "Do not invent deadlines, progress, or constraints that were not stated."
     )
 
@@ -118,18 +136,58 @@ def _build_task_description() -> str:
     """建立任務層文字。"""
 
     return (
-        "Read the user's raw requirement and organize it into a concise "
-        "requirement_context, a list of known_information, and a list of "
-        "pending_confirmation items that matter for later questioning and planning."
+        "Read the current raw requirement together with the prior conversation history, "
+        "then build a refreshed requirement_context, known_information, and pending_confirmation for this turn. "
+        "If prior user-provided facts are still relevant and not contradicted, explicitly keep them in known_information for the current turn instead of dropping them. "
+        "When a previous user message has already established task type, deadline, time budget, progress, difficulty, or constraint information and the current turn does not replace or conflict with it, preserve that information in known_information while adding the new details from the current turn. "
+        "If the current raw requirement clearly corrects or updates prior information, use the current raw requirement as the new source of truth. "
+        "If the current raw requirement conflicts with prior history but the correction is unclear, do not force a resolution; "
+        "move the conflicting item into pending_confirmation instead."
     )
 
 
-def _build_context_data(user_input: str) -> dict[str, Any]:
+def _build_context_data(
+    user_input: str,
+    conversation_history_text: str | None = None,
+) -> str:
     """建立上下文層資料。"""
 
-    return {
-        "raw_requirement": user_input,
-    }
+    sections = [
+        "Current raw requirement:",
+        user_input,
+    ]
+    if conversation_history_text is not None and conversation_history_text.strip():
+        sections.extend(
+            [
+                "",
+                "Conversation history:",
+                _normalize_conversation_history_text(conversation_history_text),
+            ]
+        )
+
+    return "\n".join(sections)
+
+
+def _normalize_conversation_history_text(conversation_history_text: str) -> str:
+    """將 transcript 角色前綴整理為較自然的 prompt 顯示格式。"""
+
+    normalized_lines: list[str] = []
+    for raw_line in conversation_history_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if line.startswith("user:"):
+            normalized_lines.append(f"User:{line[5:]}")
+            continue
+
+        if line.startswith("ai:"):
+            normalized_lines.append(f"AI:{line[3:]}")
+            continue
+
+        normalized_lines.append(line)
+
+    return "\n".join(normalized_lines)
 
 
 def _build_examples() -> list[dict[str, Any]]:
@@ -163,5 +221,69 @@ def _build_examples() -> list[dict[str, Any]]:
                     },
                 ],
             },
-        }
+        },
+        {
+            "input": (
+                "Current raw requirement:\n"
+                "我剩一天。\n\n"
+                "Conversation history:\n"
+                "User: 我要準備下週的資料庫期末報告。"
+            ),
+            "output": {
+                "requirement_context": (
+                    "使用者需要準備資料庫期末報告，但目前期限資訊存在不明確衝突。"
+                ),
+                "known_information": [
+                    {
+                        "label": "task_type",
+                        "value": "資料庫期末報告",
+                    }
+                ],
+                "pending_confirmation": [
+                    {
+                        "label": "deadline_hint",
+                        "question_hint": "實際期限是下週，還是只剩一天",
+                    }
+                ],
+            },
+        },
+        {
+            "input": (
+                "Current raw requirement:\n"
+                "已經完成系統架構了，但是模組間的API清單和資料契約還沒決定好。\n\n"
+                "Conversation history:\n"
+                "User: 我要在7天內完成Java作業，我一天只能做2小時。\n"
+                "AI: 為了幫你規劃合適的安排，我想先了解一下目前這份 Java 作業已經完成到哪裡了呢？\n"
+                "User: 已經完成系統架構了，但是模組間的API清單和資料契約還沒決定好。"
+            ),
+            "output": {
+                "requirement_context": (
+                    "使用者想在7天內完成Java作業，每天可投入2小時；"
+                    "目前已完成系統架構，但模組間的API清單與資料契約仍未決定。"
+                ),
+                "known_information": [
+                    {
+                        "label": "task_type",
+                        "value": "Java作業",
+                    },
+                    {
+                        "label": "deadline_hint",
+                        "value": "7天內",
+                    },
+                    {
+                        "label": "time_budget",
+                        "value": "一天2小時",
+                    },
+                    {
+                        "label": "current_progress",
+                        "value": "已完成系統架構",
+                    },
+                    {
+                        "label": "constraint",
+                        "value": "模組間的API清單和資料契約還沒決定好",
+                    },
+                ],
+                "pending_confirmation": [],
+            },
+        },
     ]

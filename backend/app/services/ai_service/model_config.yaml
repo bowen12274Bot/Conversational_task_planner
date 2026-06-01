@@ -15,14 +15,14 @@ models:
   - id: ai_studio_default
     provider: ai_studio
     model_name: gemma-3-12b-it
-    enabled: true
+    enabled: false
     capability_level: default
     fallback_to: openrouter_default
 
   - id: ai_studio_strong
     provider: ai_studio
     model_name: gemma-4-26b-a4b-it
-    enabled: true
+    enabled: false
     capability_level: strong
     fallback_to: openrouter_strong
 

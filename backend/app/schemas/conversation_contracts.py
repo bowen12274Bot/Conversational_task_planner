@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -22,6 +23,8 @@ class ConversationMessage(BaseModel):
     type: str = Field(..., min_length=1)
     # 訊息內容。
     content: str = Field(..., min_length=1)
+    # 訊息建立時間。
+    created_at: datetime
 
 
 class ConversationTurn(BaseModel):
@@ -60,6 +63,8 @@ class ConversationRecordStoreResult(BaseModel):
     conversation_id: str = Field(..., min_length=1)
     # 本次訊息所屬的回合識別值。
     turn_id: str = Field(..., min_length=1)
+    # 本次實際寫入訊息的建立時間。
+    message_created_at: datetime
 
 
 class ConversationHistoryResponse(BaseModel):
@@ -69,4 +74,6 @@ class ConversationHistoryResponse(BaseModel):
     conversation_id: str = Field(..., min_length=1)
     # 歷史回合資料列表。
     turns: list[ConversationTurn] = Field(default_factory=list)
+    # 該對話目前最新的結構化排程輸出快照。
+    structured_task_output: dict[str, Any] | None = None
 

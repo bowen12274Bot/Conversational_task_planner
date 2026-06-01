@@ -10,9 +10,22 @@ def test_build_context_engineering_ai_request_contains_sectioned_input_data() ->
     assert request.task_type == "context_engineering"
     assert request.input_data["rules"]
     assert request.input_data["task"]
-    assert request.input_data["context"]["raw_requirement"] == "我要整理下週的 API 串接工作"
+    assert "explicitly keep them in known_information" in request.input_data["task"]
+    assert "Current raw requirement:" in request.input_data["context"]
+    assert "我要整理下週的 API 串接工作" in request.input_data["context"]
     assert request.input_data["examples"]
     assert request.input_data["output_target"]
+
+
+def test_build_context_engineering_ai_request_includes_conversation_history_when_provided() -> None:
+    request = build_context_engineering_ai_request(
+        "我要整理下週的 API 串接工作",
+        conversation_history_text="user: 舊需求\nai: 舊回覆",
+    )
+
+    assert "Conversation history:" in request.input_data["context"]
+    assert "User: 舊需求" in request.input_data["context"]
+    assert "AI: 舊回覆" in request.input_data["context"]
 
 
 def test_build_context_engineering_ai_request_contains_format_requirements() -> None:

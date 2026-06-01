@@ -9,6 +9,9 @@ from app.schemas.ai_service_contracts import (
     ProviderRequestData,
 )
 from app.schemas.module_contracts import (
+    PlanningCreateInput,
+    PlanningCreateOutput,
+    PlanningSchedule,
     QuestioningDecision,
     ResponseOutput,
 )
@@ -23,12 +26,14 @@ def test_frontend_request_contract_accepts_minimal_payload() -> None:
 
 def test_questioning_decision_contract_represents_not_ready_state() -> None:
     decision = QuestioningDecision(
-        is_ready_for_planning=False,
+        decision="follow_up",
         reasoning="目前缺少截止時間與每日可投入時間。",
+        next_step_guidance=["預計什麼時候要完成？"],
     )
 
-    assert decision.is_ready_for_planning is False
+    assert decision.decision == "follow_up"
     assert decision.pending_confirmation == []
+    assert decision.next_step_guidance == ["預計什麼時候要完成？"]
 
 
 def test_controller_response_contract_keeps_minimal_output_shape() -> None:
@@ -44,13 +49,11 @@ def test_controller_response_contract_keeps_minimal_output_shape() -> None:
 def test_response_output_contract_keeps_only_documented_fields() -> None:
     response = ResponseOutput(
         reply_text="請先補充截止時間。",
-        response_type="questioning_guidance",
-        includes_follow_up_questions=True,
-        includes_next_action=True,
+        response_type="follow_up_question",
     )
 
-    assert response.includes_follow_up_questions is True
-    assert response.includes_next_action is True
+    assert response.reply_text == "請先補充截止時間。"
+    assert response.response_type == "follow_up_question"
 
 
 def test_ai_task_request_contract_supports_grouped_ai_requests() -> None:
@@ -59,11 +62,12 @@ def test_ai_task_request_contract_supports_grouped_ai_requests() -> None:
         group_name="questioning_decision",
         capability_level="default",
         input_data={"user_input": "我想做一個期中報告規劃"},
-        output_target="產出 Questioning 判斷結果",
+        format_requirements={"output_type": "json"},
     )
 
     assert request.group_name == "questioning_decision"
     assert request.capability_level == "default"
+    assert request.format_requirements == {"output_type": "json"}
 
 
 def test_ai_service_internal_contracts_keep_expected_shapes() -> None:
@@ -89,3 +93,21 @@ def test_ai_service_internal_contracts_keep_expected_shapes() -> None:
     assert prompt_output.prompt_text == "test prompt"
     assert execution_config.provider_id == "ai_studio"
     assert provider_request.execution_config.timeout_seconds == 30
+
+
+def test_planning_create_contracts_keep_expected_shapes() -> None:
+    planning_input = PlanningCreateInput(
+        requirement_context="使用者希望在 7 天內完成 Java 作業，目前尚未開始。",
+        known_information=[],
+        pending_confirmation=[],
+        conversation_history_text=None,
+    )
+    planning_output = PlanningCreateOutput(
+        plan_summary="先確認需求，再完成核心功能與測試。",
+        design_rationale="目前期限與任務目標已明確，因此可直接建立初步規劃。",
+        assumptions_used=[],
+        schedule=PlanningSchedule(main_tasks=[]),
+    )
+
+    assert planning_input.requirement_context.startswith("使用者希望")
+    assert planning_output.schedule.main_tasks == []

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -67,14 +68,60 @@ def store_conversation_record(
             content=request.content,
         )
         db.add(message)
+        db.flush()
+
+        conversation.conversation_history_text = _build_conversation_history_text(
+            db=db,
+            conversation_pk=conversation.conversation_pk,
+        )
         db.commit()
 
         return ConversationRecordStoreResult(
             conversation_id=request.conversation_id,
             turn_id=turn_id,
+            message_created_at=_normalize_utc_timestamp(message.created_at),
         )
     except Exception:
         db.rollback()
         raise
     finally:
         db.close()
+
+
+def _normalize_utc_timestamp(value: datetime) -> datetime:
+    """將資料庫讀出的 naive UTC 時間標準化為帶時區資訊的 UTC。"""
+
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc)
+
+    return value.replace(tzinfo=timezone.utc)
+
+
+def _build_conversation_history_text(db, conversation_pk: int) -> str | None:
+    """依現有 turn/message 順序重建完整對話歷史文字。"""
+
+    rows = db.execute(
+        select(
+            TurnMessageModel.type,
+            TurnMessageModel.content,
+        )
+        .join(
+            ConversationTurnModel,
+            TurnMessageModel.turn_pk == ConversationTurnModel.turn_pk,
+        )
+        .where(ConversationTurnModel.conversation_pk == conversation_pk)
+        .order_by(
+            ConversationTurnModel.created_at,
+            TurnMessageModel.message_index,
+            TurnMessageModel.created_at,
+        )
+    ).all()
+
+    history_lines = [
+        f"{message_type}: {content}"
+        for message_type, content in rows
+    ]
+    if not history_lines:
+        return None
+
+    return "\n".join(history_lines)

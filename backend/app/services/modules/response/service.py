@@ -1,6 +1,14 @@
-from app.schemas import AIToModuleResult, QuestioningDecision, ResponseOutput
+from app.schemas import (
+    AIToModuleResult,
+    PlanningResponseInput,
+    QuestioningDecision,
+    ResponseOutput,
+)
 from app.services.ai_service.service import run_ai_flow
-from app.services.modules.response.prompt import build_follow_up_response_ai_request
+from app.services.modules.response.prompt import (
+    build_follow_up_response_ai_request,
+    build_planning_response_ai_request,
+)
 
 MAX_RESPONSE_RETRY_COUNT = 2
 MIN_RESPONSE_TEXT_LENGTH = 8
@@ -10,6 +18,9 @@ def build_response_from_questioning(
     questioning_decision: QuestioningDecision,
 ) -> ResponseOutput:
     """根據 questioning 判斷結果生成對前端可顯示的自然語言回覆。"""
+
+    if questioning_decision.decision != "follow_up":
+        raise ValueError("僅能對 follow_up decision 生成追問回覆。")
 
     reasoning = questioning_decision.reasoning.strip()
     if not reasoning:
@@ -30,13 +41,42 @@ def build_response_from_questioning(
             return ResponseOutput(
                 reply_text=reply_text.strip(),
                 response_type="follow_up_question",
-                includes_follow_up_questions=True,
-                includes_next_action=True,
             )
 
         retry_count += 1
 
     return _build_fallback_follow_up_response(questioning_decision)
+
+
+def build_response_from_planning(
+    planning_response_input: PlanningResponseInput,
+) -> ResponseOutput:
+    """根據 planning 結果生成對前端可顯示的自然語言規劃完成回覆。"""
+
+    plan_summary = planning_response_input.plan_summary.strip()
+    design_rationale = planning_response_input.design_rationale.strip()
+    if not plan_summary:
+        raise ValueError("planning_response_input.plan_summary 不可為空白。")
+    if not design_rationale:
+        raise ValueError("planning_response_input.design_rationale 不可為空白。")
+
+    ai_request = build_planning_response_ai_request(planning_response_input)
+
+    retry_count = 0
+    while retry_count < MAX_RESPONSE_RETRY_COUNT:
+        ai_result = run_ai_flow(ai_request)
+        reply_text = _extract_response_text(ai_result)
+
+        if _is_usable_response_text(reply_text):
+            assert reply_text is not None
+            return ResponseOutput(
+                reply_text=reply_text.strip(),
+                response_type="planning_summary",
+            )
+
+        retry_count += 1
+
+    return _build_fallback_planning_response(planning_response_input)
 
 
 def _extract_response_text(ai_result: AIToModuleResult) -> str | None:
@@ -49,12 +89,74 @@ def _extract_response_text(ai_result: AIToModuleResult) -> str | None:
     if isinstance(output_result, dict):
         text = output_result.get("text")
         if isinstance(text, str) and text.strip():
-            return text.strip()
+            return _extract_final_reply_text(text)
 
     if isinstance(output_result, str) and output_result.strip():
-        return output_result.strip()
+        return _extract_final_reply_text(output_result)
 
     return None
+
+
+def _extract_final_reply_text(reply_text: str) -> str | None:
+    normalized_text = reply_text.strip()
+    if not normalized_text:
+        return None
+
+    lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+    if not lines:
+        return None
+
+    for line in reversed(lines):
+        candidate = _normalize_reply_candidate(line)
+        if _looks_like_final_reply(candidate):
+            return candidate
+
+    candidate = _normalize_reply_candidate(lines[-1])
+    return candidate or None
+
+
+def _normalize_reply_candidate(value: str) -> str:
+    normalized = value.strip().strip('"').strip("'").strip()
+    if normalized.startswith("*"):
+        normalized = normalized.lstrip("*").strip()
+    return normalized
+
+
+def _looks_like_final_reply(value: str) -> bool:
+    if not value:
+        return False
+
+    lowered = value.lower()
+    blocked_prefixes = (
+        "helpful planning assistant",
+        "natural traditional chinese",
+        "generate a short follow-up reply",
+        "final polish",
+        "draft",
+        "constraint",
+        "reasoning",
+        "next_step_guidance",
+        "input",
+        "output",
+        "wait,",
+        "applying this style",
+        "example style",
+        "this looks perfect",
+    )
+    if lowered.startswith(blocked_prefixes):
+        return False
+
+    if "`" in value or "{" in value or "}" in value:
+        return False
+
+    if ":" in value and all(ord(ch) < 128 for ch in value[: min(len(value), 24)]):
+        return False
+
+    question_marks = value.count("？") + value.count("?")
+    if question_marks == 0:
+        return False
+
+    return True
 
 
 def _is_usable_response_text(reply_text: str | None) -> bool:
@@ -76,6 +178,24 @@ def _build_fallback_follow_up_response(
     """當 AI 回覆不可用時，建立最小追問回覆。"""
 
     question_hints: list[str] = []
+    for guidance in questioning_decision.next_step_guidance:
+        normalized_guidance = guidance.strip()
+        if normalized_guidance:
+            question_hints.append(normalized_guidance)
+        if len(question_hints) >= 2:
+            break
+
+    if question_hints:
+        reply_text = (
+            "為了幫你安排得更準確，我想先確認兩件事："
+            + "？".join(question_hints).rstrip("？")
+            + "？"
+        )
+        return ResponseOutput(
+            reply_text=reply_text,
+            response_type="follow_up_question",
+        )
+
     for item in questioning_decision.pending_confirmation:
         question_hint = item.get("question_hint")
         if isinstance(question_hint, str) and question_hint.strip():
@@ -95,6 +215,28 @@ def _build_fallback_follow_up_response(
     return ResponseOutput(
         reply_text=reply_text,
         response_type="follow_up_question",
-        includes_follow_up_questions=True,
-        includes_next_action=True,
+    )
+
+
+def _build_fallback_planning_response(
+    planning_response_input: PlanningResponseInput,
+) -> ResponseOutput:
+    """當 planning 路徑 AI 回覆不可用時，建立最小規劃完成回覆。"""
+
+    plan_summary = planning_response_input.plan_summary.strip().rstrip("。")
+    design_rationale = planning_response_input.design_rationale.strip().rstrip("。")
+    if design_rationale:
+        reply_text = (
+            f"我先根據目前資訊整理出一版初步規劃，已經放在右側規劃面板。"
+            f"{plan_summary}。"
+        )
+    else:
+        reply_text = (
+            "我先根據目前資訊整理出一版初步規劃，已經放在右側規劃面板。"
+            f"{plan_summary}。"
+        )
+
+    return ResponseOutput(
+        reply_text=reply_text,
+        response_type="planning_summary",
     )

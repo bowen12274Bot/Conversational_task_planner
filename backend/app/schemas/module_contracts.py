@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,21 +19,111 @@ class ContextEngineeringOutput(BaseModel):
     known_information: list[dict[str, Any]] = Field(default_factory=list)
     # 仍待確認、暫不直接採用的資訊集合。
     pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
-    # 與目前需求相關的歷史脈絡摘要。
-    history_context_summary: str | None = None
+    # 與目前需求相關的完整歷史對話內容。
+    conversation_history_text: str | None = None
 
 
 class QuestioningDecision(BaseModel):
     """由 `Questioning Module` 根據 `Context Engineering` 整理結果所產出的判斷資料。"""
 
-    # 目前資訊是否已足以開始規劃。
-    is_ready_for_planning: bool
+    # 本輪下一步應採取的方向。
+    decision: Literal["follow_up", "planning"]
     # 對此判斷的原因說明。
     reasoning: str = Field(..., min_length=1)
     # 延用目前已知資訊集合。
     known_information: list[dict[str, Any]] = Field(default_factory=list)
     # 延用目前待確認資訊集合。
     pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    # 下一步建議內容，依 decision 語意解讀。
+    next_step_guidance: list[str] = Field(default_factory=list)
+
+
+class PlanningSubtask(BaseModel):
+    """排程核心結構中的子任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    priority: Literal["high", "medium", "low"]
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+
+
+class PlanningMainTask(BaseModel):
+    """排程核心結構中的主任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+    subtasks: list[PlanningSubtask] = Field(default_factory=list)
+
+
+class PlanningSchedule(BaseModel):
+    """Planning Module 排程結果的核心結構。"""
+
+    main_tasks: list[PlanningMainTask] = Field(default_factory=list)
+
+
+class PlanningCreateInput(BaseModel):
+    """提供 `Planning Module` 建立初步規劃時使用的輸入資料。"""
+
+    requirement_context: str = Field(..., min_length=1)
+    known_information: list[dict[str, Any]] = Field(default_factory=list)
+    pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_history_text: str | None = None
+
+
+class PlanningCreateOutput(BaseModel):
+    """由 `Planning Module` 建立介面產出的初步規劃結果。"""
+
+    plan_summary: str = Field(..., min_length=1)
+    design_rationale: str = Field(..., min_length=1)
+    assumptions_used: list[str] = Field(default_factory=list)
+    schedule: PlanningSchedule
+
+
+class StructuredSubtaskOutput(BaseModel):
+    """供前端規劃面板顯示的子任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    priority: Literal["high", "medium", "low"]
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+
+
+class StructuredMainTaskOutput(BaseModel):
+    """供前端規劃面板顯示的主任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+    subtasks: list[StructuredSubtaskOutput] = Field(default_factory=list)
+
+
+class StructuredSummaryMetricsOutput(BaseModel):
+    """供前端規劃面板 footer 顯示的摘要指標資料。"""
+
+    total_estimated_time_text: str = Field(..., min_length=1)
+    daily_time_budget_text: str = Field(..., min_length=1)
+    estimated_completion_text: str = Field(..., min_length=1)
+
+
+class StructuredTaskOutput(BaseModel):
+    """由 Output Structuring Module 產出的前端排程顯示資料。"""
+
+    plan_summary: str = Field(..., min_length=1)
+    summary_metrics: StructuredSummaryMetricsOutput
+    main_tasks: list[StructuredMainTaskOutput] = Field(default_factory=list)
+
+
+class PlanningResponseInput(BaseModel):
+    """提供 `Response Module` 在 planning 路徑生成最終回覆時使用的輸入資料。"""
+
+    plan_summary: str = Field(..., min_length=1)
+    design_rationale: str = Field(..., min_length=1)
+    structured_task_output: StructuredTaskOutput
 
 
 class ResponseOutput(BaseModel):
@@ -42,8 +132,4 @@ class ResponseOutput(BaseModel):
     # 適合直接顯示給使用者的回覆文字。
     reply_text: str = Field(..., min_length=1)
     # 回覆在互動流程中的類型。
-    response_type: str = Field(..., min_length=1)
-    # 回覆是否附帶追問內容。
-    includes_follow_up_questions: bool = False
-    # 回覆是否附帶後續動作指示。
-    includes_next_action: bool = False
+    response_type: Literal["follow_up_question", "planning_summary"]

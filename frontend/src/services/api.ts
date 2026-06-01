@@ -1,3 +1,5 @@
+import type { StructuredTaskOutput } from '../types/app'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
 export class ApiError extends Error {
@@ -22,8 +24,9 @@ type FrontendToControllerRequest = {
 
 type ControllerToFrontendResponse = {
   reply_text: string
+  reply_created_at?: string | null
   conversation_id?: string | null
-  structured_task_output?: Record<string, any> | null
+  structured_task_output?: StructuredTaskOutput | null
 }
 
 type CreateConversationResponse = {
@@ -32,11 +35,13 @@ type CreateConversationResponse = {
 
 type ConversationHistoryResponse = {
   conversation_id: string
+  structured_task_output?: StructuredTaskOutput | null
   turns: Array<{
     turn_id: string
     messages: Array<{
       type: 'system' | 'user' | 'ai'
       content: string
+      created_at: string
     }>
   }>
 }

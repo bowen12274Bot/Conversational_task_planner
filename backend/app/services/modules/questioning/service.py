@@ -1,72 +1,241 @@
-from app.schemas import ContextEngineeringOutput, QuestioningDecision
+import json
+from typing import Any, Literal, cast
+
+from app.schemas import AIToModuleResult, ContextEngineeringOutput, QuestioningDecision
+from app.services.ai_service.service import run_ai_flow
+from app.services.modules.questioning.prompt import build_questioning_ai_request
+from app.services.modules.questioning.validator import (
+    validate_questioning_decision_output,
+)
+
+
+MAX_QUESTIONING_RETRY_COUNT = 3
 
 
 def evaluate_questioning_need(
     context_output: ContextEngineeringOutput,
+    follow_up_round_count: int,
 ) -> QuestioningDecision:
-    """判斷目前資訊是否足以進入規劃，或需要先追問。"""
+    """根據整理後需求狀態判斷下一步應追問或進入規劃。"""
 
     requirement_context = context_output.requirement_context.strip()
     if not requirement_context:
         raise ValueError("requirement_context 不可為空白。")
 
-    pending_confirmation = context_output.pending_confirmation
-    known_information = context_output.known_information
+    ai_request = build_questioning_ai_request(
+        requirement_context=requirement_context,
+        known_information=context_output.known_information,
+        pending_confirmation=context_output.pending_confirmation,
+        follow_up_round_count=follow_up_round_count,
+    )
 
-    if pending_confirmation:
-        return QuestioningDecision(
-            is_ready_for_planning=False,
-            reasoning=_build_reasoning_text(
-                requirement_context=requirement_context,
-                pending_confirmation=pending_confirmation,
-            ),
-            known_information=known_information,
-            pending_confirmation=pending_confirmation,
+    retry_count = 0
+    last_failure_reason = "unknown_error"
+    last_failure_details: dict[str, Any] = {}
+
+    while retry_count < MAX_QUESTIONING_RETRY_COUNT:
+        ai_result = run_ai_flow(ai_request)
+        parse_result, failure_reason, failure_details = _parse_questioning_result(
+            ai_result=ai_result,
+            fallback_known_information=context_output.known_information,
+            fallback_pending_confirmation=context_output.pending_confirmation,
+        )
+
+        if parse_result is None:
+            last_failure_reason = failure_reason
+            last_failure_details = failure_details
+            retry_count += 1
+            continue
+
+        return parse_result
+
+    raise ValueError(
+        "Questioning output validation failed after "
+        f"{MAX_QUESTIONING_RETRY_COUNT} attempts. "
+        f"reason={last_failure_reason}, details={last_failure_details}"
+    )
+
+
+def _parse_questioning_result(
+    *,
+    ai_result: AIToModuleResult,
+    fallback_known_information: list[dict[str, Any]],
+    fallback_pending_confirmation: list[dict[str, Any]],
+) -> tuple[QuestioningDecision | None, str, dict[str, Any]]:
+    if not ai_result.success:
+        return None, "ai_service_error", {
+            "error_message": ai_result.error_message,
+            "error_stage": ai_result.error_stage,
+        }
+
+    parsed_output = _extract_questioning_output(ai_result.output_result)
+    if parsed_output is None:
+        return None, "unparseable_output", {}
+
+    validation_result = validate_questioning_decision_output(parsed_output)
+    if not validation_result.is_valid:
+        return None, validation_result.reason or "validation_failed", dict(
+            validation_result.details
         )
 
     return QuestioningDecision(
-        is_ready_for_planning=True,
-        reasoning="目前已具備基本資訊，可進入下一步規劃處理。",
-        known_information=known_information,
-        pending_confirmation=pending_confirmation,
-    )
+        decision=_normalize_questioning_decision(parsed_output["decision"]),
+        reasoning=str(parsed_output["reasoning"]).strip(),
+        known_information=_collect_information_list(
+            parsed_output.get("known_information"),
+            fallback_known_information,
+        ),
+        pending_confirmation=_collect_information_list(
+            parsed_output.get("pending_confirmation"),
+            fallback_pending_confirmation,
+        ),
+        next_step_guidance=_collect_guidance_list(
+            parsed_output.get("next_step_guidance")
+        ),
+    ), "accept", {}
 
 
-def _build_reasoning_text(
-    requirement_context: str,
-    pending_confirmation: list[dict[str, object]],
-) -> str:
-    """建立帶背景的追問理由說明。"""
+def _extract_questioning_output(
+    output_result: dict[str, Any] | str | None,
+) -> dict[str, Any] | None:
+    if isinstance(output_result, dict):
+        if _looks_like_questioning_output(output_result):
+            return output_result
 
-    missing_information_names: list[str] = []
-    for item in pending_confirmation:
-        label = item.get("label")
-        if isinstance(label, str) and label.strip():
-            missing_information_names.append(_map_label_to_display_text(label))
+        text_output = output_result.get("text")
+        if isinstance(text_output, str):
+            return _parse_questioning_text(text_output)
 
-    if not missing_information_names:
-        return (
-            f"目前需求是：{requirement_context}。"
-            "仍有一些關鍵資訊不足，先補充後會比較適合後續規劃。"
-        )
+    if isinstance(output_result, str):
+        return _parse_questioning_text(output_result)
 
-    missing_information_text = "、".join(missing_information_names)
-    return (
-        f"目前需求是：{requirement_context}。"
-        f"但目前仍缺少 {missing_information_text}，"
-        "先補這些資訊會比較適合後續規劃。"
-    )
+    return None
 
 
-def _map_label_to_display_text(label: str) -> str:
-    """將內部 label 轉為較自然的中文描述。"""
+def _parse_questioning_text(text_output: str) -> dict[str, Any] | None:
+    normalized_text = _strip_markdown_code_fence(text_output.strip())
+    if not normalized_text:
+        return None
 
-    label_display_map = {
-        "current_progress": "目前進度",
-        "time_budget": "可投入時間",
-        "difficulty": "困難點",
-        "constraint": "限制條件",
-        "deadline_hint": "期限",
-        "task_type": "任務內容",
+    return _extract_last_questioning_json_object(normalized_text)
+
+
+def _load_json_object(text_output: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+
+    try:
+        parsed_output = json.loads(text_output)
+    except json.JSONDecodeError:
+        parsed_output = None
+        for start_index in range(len(text_output) - 1, -1, -1):
+            if text_output[start_index] != "{":
+                continue
+
+            try:
+                candidate, _ = decoder.raw_decode(text_output[start_index:])
+            except json.JSONDecodeError:
+                continue
+
+            if isinstance(candidate, dict):
+                parsed_output = candidate
+                break
+
+    if not isinstance(parsed_output, dict):
+        return None
+
+    return parsed_output
+
+
+def _extract_last_questioning_json_object(text_output: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    candidates: list[dict[str, Any]] = []
+
+    try:
+        parsed_output = json.loads(text_output)
+    except json.JSONDecodeError:
+        parsed_output = None
+    else:
+        if isinstance(parsed_output, dict) and _looks_like_questioning_output(parsed_output):
+            return parsed_output
+
+    for start_index in range(len(text_output) - 1, -1, -1):
+        if text_output[start_index] != "{":
+            continue
+
+        try:
+            candidate, _ = decoder.raw_decode(text_output[start_index:])
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(candidate, dict):
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        if _looks_like_questioning_output(candidate):
+            return candidate
+
+    return None
+
+
+def _strip_markdown_code_fence(text_output: str) -> str:
+    if not text_output.startswith("```"):
+        return text_output
+
+    lines = text_output.splitlines()
+    if not lines:
+        return text_output
+
+    if lines[0].startswith("```"):
+        lines = lines[1:]
+
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+
+    return "\n".join(lines).strip()
+
+
+def _looks_like_questioning_output(value: dict[str, Any]) -> bool:
+    required_keys = {
+        "decision",
+        "reasoning",
+        "known_information",
+        "pending_confirmation",
+        "next_step_guidance",
     }
-    return label_display_map.get(label, label)
+    return required_keys.issubset(value.keys())
+
+
+def _normalize_questioning_decision(value: Any) -> Literal["follow_up", "planning"]:
+    if value == "follow_up":
+        return cast(Literal["follow_up", "planning"], "follow_up")
+    if value == "planning":
+        return cast(Literal["follow_up", "planning"], "planning")
+
+    raise ValueError(f"Unsupported questioning decision: {value!r}")
+
+
+def _collect_information_list(
+    value: Any,
+    fallback_value: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return list(fallback_value)
+
+    collected_items: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            collected_items.append(item)
+
+    return collected_items
+
+
+def _collect_guidance_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    guidance_items: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            guidance_items.append(item.strip())
+
+    return guidance_items

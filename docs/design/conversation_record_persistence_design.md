@@ -4,7 +4,7 @@
 
 ## 文件目的
 
-本文件用於整理 MVP2 階段對話紀錄保存功能的設計想法，說明目前為何需要建立固定的對話識別值、如何保存每次使用者輸入，以及歷史資料應如何回傳。
+本文件用於整理 MVP2 階段對話紀錄保存功能的設計想法，說明目前為何需要建立固定的對話識別值、如何保存每次使用者輸入，以及歷史資料應如何回傳與提供後續模組使用。
 
 本文件屬於設計層文件，重點在於保留設計脈絡與收斂理由；正式規格內容仍以 `docs/specs/` 下相關 API、資料契約與資料表文件為準。
 
@@ -81,6 +81,26 @@
 
 這樣可讓前端在刷新或重新進入頁面時，根據歷史資料重建對話畫面。
 
+### 4. 每次存入訊息時同步維護 `conversation_history_text`
+
+除了保存原始 `turn_messages` 外，目前也收斂為在 `conversations` 主資料上同步維護一份聚合後的 `conversation_history_text`。
+
+其目的不是取代原始對話紀錄，而是提供後續模組一份可直接使用的完整歷史文字內容，避免每次都由上層模組重新從 `turn_messages` 拼接歷史。
+
+目前方向如下：
+
+- 每當新的 `turn_message` 存入資料庫
+- `Persistence Layer` 會依既有順序整理整段對話歷史
+- 並同步更新所屬 `conversation` 的 `conversation_history_text`
+
+在此設計下：
+
+- 原始對話紀錄仍以 `conversation_turns` 與 `turn_messages` 保存
+- 聚合後的完整歷史文字則由 `conversation_history_text` 承接
+- `Context Engineering Module` 後續若需要歷史脈絡，應優先直接讀取 `conversation_history_text`
+
+此方向的重點，在於將歷史文字整理責任放在 `Persistence Layer`，降低 `Context Engineering Module` 與其他模組在使用歷史脈絡時的責任複雜度
+
 ---
 
 ## 最小保存範圍
@@ -91,6 +111,7 @@
 - 保存每輪對話中的使用者輸入與 AI 回覆
 - 查詢指定對話的歷史資料
 - 回傳前端可重新整理畫面的歷史資料格式
+- 同步維護可供後續模組直接使用的 `conversation_history_text`
 
 現階段先不處理：
 

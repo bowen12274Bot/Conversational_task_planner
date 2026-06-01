@@ -5,7 +5,7 @@ import {
   getConversationHistory,
   sendUserRequest,
 } from '../services/api'
-import type { Message } from '../types/app'
+import type { Message, StructuredTaskOutput } from '../types/app'
 import {
   clearConversationCache,
   getDefaultMessages,
@@ -21,9 +21,12 @@ export function useConversationSession() {
   const isLoading = ref(false)
   const isInitializing = ref(true)
   const conversationId = ref<string | null>(null)
+  const structuredTaskOutput = ref<StructuredTaskOutput | null>(null)
 
   const createMessageId = () =>
     messages.value.reduce((maxId, message) => Math.max(maxId, message.id), 0) + 1
+
+  const createTimestamp = () => new Date().toISOString()
 
   const persistConversationCache = () => {
     saveConversationCache(messages.value, conversationId.value)
@@ -37,12 +40,14 @@ export function useConversationSession() {
         id: nextMessageId++,
         type: msg.type,
         content: msg.content,
+        timestamp: msg.created_at,
       })),
     )
 
     messages.value = historyMessages.length > 0
       ? historyMessages
       : getDefaultMessages()
+    structuredTaskOutput.value = history.structured_task_output ?? null
 
     saveConversationCache(messages.value, currentConversationId)
   }
@@ -52,6 +57,7 @@ export function useConversationSession() {
     conversationId.value = await createConversation()
     saveConversationId(conversationId.value)
     messages.value = getDefaultMessages()
+    structuredTaskOutput.value = null
     persistConversationCache()
   }
 
@@ -103,11 +109,16 @@ export function useConversationSession() {
       id: createMessageId(),
       type: 'ai',
       content: `抱歉，發生錯誤：${error instanceof Error ? error.message : '未知錯誤'}`,
+      timestamp: createTimestamp(),
     })
     persistConversationCache()
   }
 
-  const sendMessage = async (): Promise<{ ok: true; inputText: string } | { ok: false }> => {
+  const setStructuredTaskOutput = (value: StructuredTaskOutput | null) => {
+    structuredTaskOutput.value = value
+  }
+
+  const sendMessage = async (): Promise<{ ok: true } | { ok: false }> => {
     if (!userInput.value.trim() || isLoading.value) {
       return { ok: false }
     }
@@ -124,6 +135,7 @@ export function useConversationSession() {
       id: createMessageId(),
       type: 'user',
       content: inputText,
+      timestamp: createTimestamp(),
     })
     persistConversationCache()
 
@@ -141,6 +153,7 @@ export function useConversationSession() {
             id: createMessageId(),
             type: 'user',
             content: inputText,
+            timestamp: createTimestamp(),
           })
           persistConversationCache()
           response = await sendUserRequest(inputText, conversationId.value!)
@@ -158,9 +171,11 @@ export function useConversationSession() {
         id: createMessageId(),
         type: 'ai',
         content: response.reply_text,
+        timestamp: response.reply_created_at ?? createTimestamp(),
       })
+      structuredTaskOutput.value = response.structured_task_output ?? null
       persistConversationCache()
-      return { ok: true, inputText }
+      return { ok: true }
     } catch (error) {
       appendErrorMessage(error)
       return { ok: false }
@@ -179,6 +194,8 @@ export function useConversationSession() {
     isLoading,
     messages,
     sendMessage,
+    setStructuredTaskOutput,
+    structuredTaskOutput,
     userInput,
   }
 }

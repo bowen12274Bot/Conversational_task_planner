@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from app.schemas import AIToModuleResult, ContextEngineeringOutput
+from app.services.persistence import get_conversation_transcript
 from app.services.ai_service.service import run_ai_flow
 from app.services.modules.context_engineering.prompt import (
     build_context_engineering_ai_request,
@@ -16,7 +17,7 @@ MAX_CONTEXT_ENGINEERING_RETRY_COUNT = 3
 
 def build_context_from_raw_input(
     user_input: str,
-    history_context_summary: str | None = None,
+    conversation_id: str | None = None,
 ) -> ContextEngineeringOutput:
     """將使用者原始輸入整理為後續流程可用的基礎上下文。"""
 
@@ -24,7 +25,11 @@ def build_context_from_raw_input(
     if not normalized_input:
         raise ValueError("user_input 不可為空白。")
 
-    ai_request = build_context_engineering_ai_request(normalized_input)
+    conversation_history_text = _load_conversation_history_text(conversation_id)
+    ai_request = build_context_engineering_ai_request(
+        normalized_input,
+        conversation_history_text=conversation_history_text,
+    )
     retry_count = 0
     last_failure_reason = "unknown_error"
     last_failure_details: dict[str, Any] = {}
@@ -34,7 +39,7 @@ def build_context_from_raw_input(
         parse_result, failure_reason, failure_details = _parse_context_engineering_result(
             ai_result=ai_result,
             user_input=normalized_input,
-            history_context_summary=history_context_summary,
+            conversation_history_text=conversation_history_text,
         )
 
         if parse_result is None:
@@ -52,10 +57,19 @@ def build_context_from_raw_input(
     )
 
 
+def _load_conversation_history_text(conversation_id: str | None) -> str | None:
+    """依 conversation_id 載入聚合後的完整歷史文字內容。"""
+
+    if conversation_id is None or not conversation_id.strip():
+        return None
+
+    return get_conversation_transcript(conversation_id.strip())
+
+
 def _parse_context_engineering_result(
     ai_result: AIToModuleResult,
     user_input: str,
-    history_context_summary: str | None = None,
+    conversation_history_text: str | None = None,
 ) -> tuple[ContextEngineeringOutput | None, str, dict[str, Any]]:
     """將 AI 回傳結果整理為 ContextEngineeringOutput。"""
 
@@ -91,7 +105,7 @@ def _parse_context_engineering_result(
         requirement_context=requirement_context.strip(),
         known_information=known_information,
         pending_confirmation=pending_confirmation,
-        history_context_summary=history_context_summary,
+        conversation_history_text=conversation_history_text,
     ), "accept", {}
 
 
@@ -121,18 +135,7 @@ def _parse_context_engineering_text(text_output: str) -> dict[str, Any] | None:
     if not normalized_text:
         return None
 
-    try:
-        parsed_output = json.loads(normalized_text)
-    except json.JSONDecodeError:
-        return None
-
-    if not isinstance(parsed_output, dict):
-        return None
-
-    if not _looks_like_context_engineering_output(parsed_output):
-        return None
-
-    return parsed_output
+    return _extract_last_context_engineering_json_object(normalized_text)
 
 
 def _strip_markdown_code_fence(text_output: str) -> str:
@@ -177,3 +180,38 @@ def _collect_information_list(value: Any) -> list[dict[str, Any]]:
             collected_items.append(item)
 
     return collected_items
+
+
+def _extract_last_context_engineering_json_object(
+    text_output: str,
+) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    candidates: list[dict[str, Any]] = []
+
+    try:
+        parsed_output = json.loads(text_output)
+    except json.JSONDecodeError:
+        parsed_output = None
+    else:
+        if isinstance(parsed_output, dict) and _looks_like_context_engineering_output(
+            parsed_output
+        ):
+            return parsed_output
+
+    for start_index in range(len(text_output) - 1, -1, -1):
+        if text_output[start_index] != "{":
+            continue
+
+        try:
+            candidate, _ = decoder.raw_decode(text_output[start_index:])
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(candidate, dict):
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        if _looks_like_context_engineering_output(candidate):
+            return candidate
+
+    return None

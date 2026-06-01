@@ -12,3 +12,6 @@
 - [planning_create_prompt_spec.md](./planning_create_prompt_spec.md)
   - Planning Module Create 的 prompt 規格
   - 用於整理目前 planning create prompt 的自然語言原文、中文對照、examples 與可行性約束
+- [response_prompt_spec.md](./response_prompt_spec.md)
+  - Response Module 的 planning 路徑 prompt 規格
+  - 用於整理規劃完成後左側聊天區純文字回覆的 prompt 設計

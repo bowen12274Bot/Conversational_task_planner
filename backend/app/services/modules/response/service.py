@@ -1,6 +1,14 @@
-from app.schemas import AIToModuleResult, QuestioningDecision, ResponseOutput
+from app.schemas import (
+    AIToModuleResult,
+    PlanningResponseInput,
+    QuestioningDecision,
+    ResponseOutput,
+)
 from app.services.ai_service.service import run_ai_flow
-from app.services.modules.response.prompt import build_follow_up_response_ai_request
+from app.services.modules.response.prompt import (
+    build_follow_up_response_ai_request,
+    build_planning_response_ai_request,
+)
 
 MAX_RESPONSE_RETRY_COUNT = 2
 MIN_RESPONSE_TEXT_LENGTH = 8
@@ -38,6 +46,37 @@ def build_response_from_questioning(
         retry_count += 1
 
     return _build_fallback_follow_up_response(questioning_decision)
+
+
+def build_response_from_planning(
+    planning_response_input: PlanningResponseInput,
+) -> ResponseOutput:
+    """根據 planning 結果生成對前端可顯示的自然語言規劃完成回覆。"""
+
+    plan_summary = planning_response_input.plan_summary.strip()
+    design_rationale = planning_response_input.design_rationale.strip()
+    if not plan_summary:
+        raise ValueError("planning_response_input.plan_summary 不可為空白。")
+    if not design_rationale:
+        raise ValueError("planning_response_input.design_rationale 不可為空白。")
+
+    ai_request = build_planning_response_ai_request(planning_response_input)
+
+    retry_count = 0
+    while retry_count < MAX_RESPONSE_RETRY_COUNT:
+        ai_result = run_ai_flow(ai_request)
+        reply_text = _extract_response_text(ai_result)
+
+        if _is_usable_response_text(reply_text):
+            assert reply_text is not None
+            return ResponseOutput(
+                reply_text=reply_text.strip(),
+                response_type="planning_summary",
+            )
+
+        retry_count += 1
+
+    return _build_fallback_planning_response(planning_response_input)
 
 
 def _extract_response_text(ai_result: AIToModuleResult) -> str | None:
@@ -176,4 +215,28 @@ def _build_fallback_follow_up_response(
     return ResponseOutput(
         reply_text=reply_text,
         response_type="follow_up_question",
+    )
+
+
+def _build_fallback_planning_response(
+    planning_response_input: PlanningResponseInput,
+) -> ResponseOutput:
+    """當 planning 路徑 AI 回覆不可用時，建立最小規劃完成回覆。"""
+
+    plan_summary = planning_response_input.plan_summary.strip().rstrip("。")
+    design_rationale = planning_response_input.design_rationale.strip().rstrip("。")
+    if design_rationale:
+        reply_text = (
+            f"我先根據目前資訊整理出一版初步規劃，已經放在右側規劃面板。"
+            f"{plan_summary}。"
+        )
+    else:
+        reply_text = (
+            "我先根據目前資訊整理出一版初步規劃，已經放在右側規劃面板。"
+            f"{plan_summary}。"
+        )
+
+    return ResponseOutput(
+        reply_text=reply_text,
+        response_type="planning_summary",
     )

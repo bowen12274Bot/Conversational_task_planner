@@ -109,10 +109,18 @@ class StructuredTaskOutput(BaseModel):
     main_tasks: list[StructuredMainTaskOutput] = Field(default_factory=list)
 
 
+class PlanningResponseInput(BaseModel):
+    """提供 `Response Module` 在 planning 路徑生成最終回覆時使用的輸入資料。"""
+
+    plan_summary: str = Field(..., min_length=1)
+    design_rationale: str = Field(..., min_length=1)
+    structured_task_output: StructuredTaskOutput
+
+
 class ResponseOutput(BaseModel):
     """由 `Response Module` 根據 `Questioning 判斷結果` 所生成的、適合提供前端顯示的最終回覆內容。"""
 
     # 適合直接顯示給使用者的回覆文字。
     reply_text: str = Field(..., min_length=1)
-    # 回覆在互動流程中的類型。現階段僅明確支援追問引導回覆。
-    response_type: Literal["follow_up_question"]
+    # 回覆在互動流程中的類型。
+    response_type: Literal["follow_up_question", "planning_summary"]

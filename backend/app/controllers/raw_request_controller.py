@@ -8,6 +8,7 @@ from app.schemas import (
     FrontendToControllerRequest,
     PlanningCreateInput,
     PlanningCreateOutput,
+    PlanningResponseInput,
     QuestioningDecision,
     ResponseOutput,
 )
@@ -24,7 +25,10 @@ from app.services.persistence import (
     save_structured_task_output,
     store_conversation_record,
 )
-from app.services.modules.response import build_response_from_questioning
+from app.services.modules.response import (
+    build_response_from_planning,
+    build_response_from_questioning,
+)
 
 
 RAW_REQUEST_START_STAGE = "F001"
@@ -198,11 +202,25 @@ class RawRequestController:
         if context.planning_output is None:
             raise ValueError("planning_output 尚未建立。")
 
-        context.structured_task_output = build_structured_task_output(
-            context.planning_output
-        ).model_dump()
+        structured_task_output = build_structured_task_output(context.planning_output)
+        context.structured_task_output = structured_task_output.model_dump()
         save_structured_task_output(
             context.conversation_id, context.structured_task_output
+        )
+        context.response_output = build_response_from_planning(
+            PlanningResponseInput(
+                plan_summary=context.planning_output.plan_summary,
+                design_rationale=context.planning_output.design_rationale,
+                structured_task_output=structured_task_output,
+            )
+        )
+        store_conversation_record(
+            ConversationRecordStoreRequest(
+                conversation_id=context.conversation_id,
+                turn_id=context.turn_id,
+                type="ai",
+                content=context.response_output.reply_text,
+            )
         )
         self._transition(context, next_stage="F012")
 
@@ -210,11 +228,11 @@ class RawRequestController:
         self,
         context: RawRequestFlowContext,
     ) -> ControllerToFrontendResponse:
-        if context.planning_output is None:
-            raise ValueError("planning_output 尚未建立。")
+        if context.response_output is None:
+            raise ValueError("response_output 尚未建立。")
 
         return ControllerToFrontendResponse(
-            reply_text=context.planning_output.plan_summary,
+            reply_text=context.response_output.reply_text,
             conversation_id=context.conversation_id,
             structured_task_output=context.structured_task_output,
         )

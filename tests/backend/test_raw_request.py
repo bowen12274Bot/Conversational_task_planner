@@ -130,13 +130,24 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
 ) -> None:
     reset_calls: list[str] = []
     saved_structured_outputs: list[tuple[str, dict[str, object] | None]] = []
+    stored_records: list[dict[str, str | None]] = []
 
     monkeypatch.setattr(
         raw_request_module,
         "store_conversation_record",
-        lambda record: SimpleNamespace(
-            conversation_id=record.conversation_id,
-            turn_id="turn-001",
+        lambda record: (
+            stored_records.append(
+                {
+                    "conversation_id": record.conversation_id,
+                    "turn_id": record.turn_id,
+                    "type": record.type,
+                    "content": record.content,
+                }
+            )
+            or SimpleNamespace(
+                conversation_id=record.conversation_id,
+                turn_id="turn-001",
+            )
         ),
     )
     monkeypatch.setattr(
@@ -208,6 +219,14 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
             ),
         ),
     )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_response_from_planning",
+        lambda planning_response_input: ResponseOutput(
+            reply_text="我先整理出一版初步規劃，已經放在右側規劃面板。",
+            response_type="planning_summary",
+        ),
+    )
 
     response = client.post(
         "/api/raw-request",
@@ -220,8 +239,22 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     assert response.status_code == 200
     body = response.json()
     assert body["conversation_id"] == "conv-002"
-    assert body["reply_text"] == "先確認需求，再完成核心功能與測試。"
+    assert body["reply_text"] == "我先整理出一版初步規劃，已經放在右側規劃面板。"
     assert body["structured_task_output"]["plan_summary"] == "先確認需求，再完成核心功能與測試。"
     assert body["structured_task_output"]["main_tasks"][0]["title"] == "確認需求"
     assert reset_calls == ["conv-002"]
     assert saved_structured_outputs == [("conv-002", body["structured_task_output"])]
+    assert stored_records == [
+        {
+            "conversation_id": "conv-002",
+            "turn_id": None,
+            "type": "user",
+            "content": "我想把 Java 作業在 7 天內做完",
+        },
+        {
+            "conversation_id": "conv-002",
+            "turn_id": "turn-001",
+            "type": "ai",
+            "content": "我先整理出一版初步規劃，已經放在右側規劃面板。",
+        },
+    ]

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.schemas import (
     PlanningCreateOutput,
     PlanningMainTask,
@@ -49,9 +51,19 @@ def test_build_structured_task_output_sorts_main_tasks_and_subtasks() -> None:
         ),
     )
 
-    result = build_structured_task_output(planning_output)
+    result = build_structured_task_output(
+        planning_output,
+        known_information=[
+            {"label": "time_budget", "value": "每天 2 小時"},
+            {"label": "deadline_hint", "value": "7天內"},
+        ],
+        current_datetime=datetime(2026, 6, 2, 0, 0, tzinfo=timezone.utc),
+    )
 
     assert result.plan_summary == "先確認需求，再完成核心功能與測試。"
+    assert result.summary_metrics.total_estimated_time_text == "約 5.5 小時"
+    assert result.summary_metrics.daily_time_budget_text == "每天 2 小時"
+    assert result.summary_metrics.estimated_completion_text == "2026/06/09（週二）"
     assert result.main_tasks[0].title == "確認作業需求"
     assert result.main_tasks[1].title == "核心功能實作"
     assert result.main_tasks[1].subtasks[0].title == "完成主要功能程式碼"

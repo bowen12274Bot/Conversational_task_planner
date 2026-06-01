@@ -2,6 +2,7 @@ export type Message = {
   id: number
   type: 'system' | 'user' | 'ai'
   content: string
+  timestamp?: string
 }
 
 export type StructuredSubtaskOutput = {
@@ -20,8 +21,15 @@ export type StructuredMainTaskOutput = {
   subtasks: StructuredSubtaskOutput[]
 }
 
+export type StructuredSummaryMetricsOutput = {
+  total_estimated_time_text: string
+  daily_time_budget_text: string
+  estimated_completion_text: string
+}
+
 export type StructuredTaskOutput = {
   plan_summary: string
+  summary_metrics: StructuredSummaryMetricsOutput
   main_tasks: StructuredMainTaskOutput[]
 }
 

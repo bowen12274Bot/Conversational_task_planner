@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import json
 
 from sqlalchemy import select
@@ -34,6 +35,7 @@ def get_conversation_history(
                 ConversationMessage(
                     type=message.type,
                     content=message.content,
+                    created_at=_normalize_utc_timestamp(message.created_at),
                 )
                 for message in turn.messages
             ]
@@ -55,3 +57,12 @@ def get_conversation_history(
         )
     finally:
         db.close()
+
+
+def _normalize_utc_timestamp(value: datetime) -> datetime:
+    """將資料庫讀出的 naive UTC 時間標準化為帶時區資訊的 UTC。"""
+
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc)
+
+    return value.replace(tzinfo=timezone.utc)

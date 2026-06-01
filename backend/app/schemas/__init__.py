@@ -39,6 +39,7 @@ from app.schemas.module_contracts import (
     RequirementInput,
     ResponseOutput,
     StructuredMainTaskOutput,
+    StructuredSummaryMetricsOutput,
     StructuredSubtaskOutput,
     StructuredTaskOutput,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "RequirementInput",
     "ResponseOutput",
     "StructuredMainTaskOutput",
+    "StructuredSummaryMetricsOutput",
     "StructuredSubtaskOutput",
     "StructuredTaskOutput",
 ]

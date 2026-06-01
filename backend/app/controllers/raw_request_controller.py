@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from app.schemas import (
@@ -48,6 +49,7 @@ class RawRequestFlowContext:
     planning_input: PlanningCreateInput | None = None
     planning_output: PlanningCreateOutput | None = None
     structured_task_output: dict[str, Any] | None = None
+    reply_created_at: datetime | None = None
     current_stage: str = RAW_REQUEST_START_STAGE
     traversed_history: list[str] = field(
         default_factory=lambda: [RAW_REQUEST_START_STAGE]
@@ -149,13 +151,16 @@ class RawRequestController:
         context.response_output = build_response_from_questioning(
             questioning_decision=context.questioning_decision,
         )
-        store_conversation_record(
+        store_result = store_conversation_record(
             ConversationRecordStoreRequest(
                 conversation_id=context.conversation_id,
                 turn_id=context.turn_id,
                 type="ai",
                 content=context.response_output.reply_text,
             )
+        )
+        context.reply_created_at = self._normalize_utc_timestamp(
+            store_result.message_created_at
         )
         self._transition(context, next_stage="F007")
 
@@ -168,6 +173,7 @@ class RawRequestController:
 
         return ControllerToFrontendResponse(
             reply_text=context.response_output.reply_text,
+            reply_created_at=context.reply_created_at,
             conversation_id=context.conversation_id,
             structured_task_output=None,
         )
@@ -201,8 +207,14 @@ class RawRequestController:
     def _run_stage_f011(self, context: RawRequestFlowContext) -> None:
         if context.planning_output is None:
             raise ValueError("planning_output 尚未建立。")
+        if context.context_output is None:
+            raise ValueError("context_output 尚未建立。")
 
-        structured_task_output = build_structured_task_output(context.planning_output)
+        structured_task_output = build_structured_task_output(
+            context.planning_output,
+            known_information=context.context_output.known_information,
+            current_datetime=datetime.now(timezone.utc),
+        )
         context.structured_task_output = structured_task_output.model_dump()
         save_structured_task_output(
             context.conversation_id, context.structured_task_output
@@ -214,13 +226,16 @@ class RawRequestController:
                 structured_task_output=structured_task_output,
             )
         )
-        store_conversation_record(
+        store_result = store_conversation_record(
             ConversationRecordStoreRequest(
                 conversation_id=context.conversation_id,
                 turn_id=context.turn_id,
                 type="ai",
                 content=context.response_output.reply_text,
             )
+        )
+        context.reply_created_at = self._normalize_utc_timestamp(
+            store_result.message_created_at
         )
         self._transition(context, next_stage="F012")
 
@@ -233,6 +248,7 @@ class RawRequestController:
 
         return ControllerToFrontendResponse(
             reply_text=context.response_output.reply_text,
+            reply_created_at=context.reply_created_at,
             conversation_id=context.conversation_id,
             structured_task_output=context.structured_task_output,
         )
@@ -250,3 +266,11 @@ class RawRequestController:
 
         if stage not in RAW_REQUEST_ALLOWED_END_STAGES:
             raise ValueError(f"raw_request flow ended at invalid stage: {stage}")
+
+    def _normalize_utc_timestamp(self, value: datetime) -> datetime:
+        """將回覆訊息時間標準化為帶時區資訊的 UTC。"""
+
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc)
+
+        return value.replace(tzinfo=timezone.utc)

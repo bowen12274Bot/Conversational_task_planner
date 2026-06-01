@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from datetime import datetime
 from types import SimpleNamespace
 
 from app.controllers import raw_request_controller as raw_request_module
@@ -46,11 +47,13 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
             return SimpleNamespace(
                 conversation_id=record.conversation_id,
                 turn_id="turn-001",
+                message_created_at=datetime(2026, 6, 2, 10, 30, 0),
             )
 
         return SimpleNamespace(
             conversation_id=record.conversation_id,
             turn_id=record.turn_id,
+            message_created_at=datetime(2026, 6, 2, 10, 30, 30),
         )
 
     monkeypatch.setattr(raw_request_module, "store_conversation_record", fake_store)
@@ -106,6 +109,7 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     body = response.json()
     assert body["conversation_id"] == "conv-001"
     assert body["reply_text"] == "請先補充每天可投入的時間。"
+    assert body["reply_created_at"].endswith("Z") or body["reply_created_at"].endswith("+00:00")
     assert body["structured_task_output"] is None
     assert stored_records == [
         {
@@ -147,6 +151,7 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
             or SimpleNamespace(
                 conversation_id=record.conversation_id,
                 turn_id="turn-001",
+                message_created_at=datetime(2026, 6, 2, 11, 0, 0),
             )
         ),
     )
@@ -240,7 +245,10 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     body = response.json()
     assert body["conversation_id"] == "conv-002"
     assert body["reply_text"] == "我先整理出一版初步規劃，已經放在右側規劃面板。"
+    assert body["reply_created_at"].endswith("Z") or body["reply_created_at"].endswith("+00:00")
     assert body["structured_task_output"]["plan_summary"] == "先確認需求，再完成核心功能與測試。"
+    assert body["structured_task_output"]["summary_metrics"]["daily_time_budget_text"] == "待確認"
+    assert "estimated_completion_text" in body["structured_task_output"]["summary_metrics"]
     assert body["structured_task_output"]["main_tasks"][0]["title"] == "確認需求"
     assert reset_calls == ["conv-002"]
     assert saved_structured_outputs == [("conv-002", body["structured_task_output"])]

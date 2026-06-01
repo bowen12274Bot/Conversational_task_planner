@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -78,12 +79,22 @@ def store_conversation_record(
         return ConversationRecordStoreResult(
             conversation_id=request.conversation_id,
             turn_id=turn_id,
+            message_created_at=_normalize_utc_timestamp(message.created_at),
         )
     except Exception:
         db.rollback()
         raise
     finally:
         db.close()
+
+
+def _normalize_utc_timestamp(value: datetime) -> datetime:
+    """將資料庫讀出的 naive UTC 時間標準化為帶時區資訊的 UTC。"""
+
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc)
+
+    return value.replace(tzinfo=timezone.utc)
 
 
 def _build_conversation_history_text(db, conversation_pk: int) -> str | None:

@@ -102,10 +102,19 @@ class StructuredMainTaskOutput(BaseModel):
     subtasks: list[StructuredSubtaskOutput] = Field(default_factory=list)
 
 
+class StructuredSummaryMetricsOutput(BaseModel):
+    """供前端規劃面板 footer 顯示的摘要指標資料。"""
+
+    total_estimated_time_text: str = Field(..., min_length=1)
+    daily_time_budget_text: str = Field(..., min_length=1)
+    estimated_completion_text: str = Field(..., min_length=1)
+
+
 class StructuredTaskOutput(BaseModel):
     """由 Output Structuring Module 產出的前端排程顯示資料。"""
 
     plan_summary: str = Field(..., min_length=1)
+    summary_metrics: StructuredSummaryMetricsOutput
     main_tasks: list[StructuredMainTaskOutput] = Field(default_factory=list)
 
 

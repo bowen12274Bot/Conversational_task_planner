@@ -26,6 +26,8 @@ export function useConversationSession() {
   const createMessageId = () =>
     messages.value.reduce((maxId, message) => Math.max(maxId, message.id), 0) + 1
 
+  const createTimestamp = () => new Date().toISOString()
+
   const persistConversationCache = () => {
     saveConversationCache(messages.value, conversationId.value)
   }
@@ -38,6 +40,7 @@ export function useConversationSession() {
         id: nextMessageId++,
         type: msg.type,
         content: msg.content,
+        timestamp: msg.created_at,
       })),
     )
 
@@ -106,6 +109,7 @@ export function useConversationSession() {
       id: createMessageId(),
       type: 'ai',
       content: `抱歉，發生錯誤：${error instanceof Error ? error.message : '未知錯誤'}`,
+      timestamp: createTimestamp(),
     })
     persistConversationCache()
   }
@@ -131,6 +135,7 @@ export function useConversationSession() {
       id: createMessageId(),
       type: 'user',
       content: inputText,
+      timestamp: createTimestamp(),
     })
     persistConversationCache()
 
@@ -148,6 +153,7 @@ export function useConversationSession() {
             id: createMessageId(),
             type: 'user',
             content: inputText,
+            timestamp: createTimestamp(),
           })
           persistConversationCache()
           response = await sendUserRequest(inputText, conversationId.value!)
@@ -165,6 +171,7 @@ export function useConversationSession() {
         id: createMessageId(),
         type: 'ai',
         content: response.reply_text,
+        timestamp: response.reply_created_at ?? createTimestamp(),
       })
       structuredTaskOutput.value = response.structured_task_output ?? null
       persistConversationCache()

@@ -24,6 +24,7 @@ type FrontendToControllerRequest = {
 
 type ControllerToFrontendResponse = {
   reply_text: string
+  reply_created_at?: string | null
   conversation_id?: string | null
   structured_task_output?: StructuredTaskOutput | null
 }
@@ -40,6 +41,7 @@ type ConversationHistoryResponse = {
     messages: Array<{
       type: 'system' | 'user' | 'ai'
       content: string
+      created_at: string
     }>
   }>
 }

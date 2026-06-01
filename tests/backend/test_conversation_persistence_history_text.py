@@ -102,3 +102,5 @@ def test_conversation_history_returns_persisted_structured_task_output() -> None
     assert history.conversation_id == created.conversation_id
     assert history.structured_task_output == structured_task_output
     assert history.turns[0].messages[0].content == "我要在 7 天內完成 Java 作業"
+    assert history.turns[0].messages[0].created_at is not None
+    assert history.turns[0].messages[1].created_at is not None

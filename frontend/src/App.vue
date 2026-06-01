@@ -1,29 +1,38 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import {
+  ArrowDownTrayIcon,
+  CalendarDaysIcon,
+  CheckBadgeIcon,
+  ChevronDownIcon,
+  ClipboardDocumentCheckIcon,
+  ClockIcon,
+  CpuChipIcon,
+  LanguageIcon,
+  SunIcon,
+  UserCircleIcon,
+} from '@heroicons/vue/24/outline'
 import { useConversationSession } from './composables/useConversationSession'
-import { mockStructuredTaskOutput } from './utils/mockStructuredTaskOutput'
-import type { StructuredMainTaskOutput } from './types/app'
+import type { Message, StructuredMainTaskOutput } from './types/app'
 
 const {
   isInitializing,
   isLoading,
   messages,
   sendMessage: sendConversationMessage,
-  setStructuredTaskOutput,
   structuredTaskOutput,
   userInput,
 } = useConversationSession()
 
-const isDev = import.meta.env.DEV
 const expandedTaskOrders = ref<number[]>([])
+const loadingElapsedSeconds = ref(0)
+let loadingTimer: ReturnType<typeof setInterval> | null = null
 
 const sendMessage = async () => {
   await sendConversationMessage()
 }
 
-const loadMockPlanningPreview = () => {
-  setStructuredTaskOutput(mockStructuredTaskOutput)
-}
+const noop = () => {}
 
 watch(
   structuredTaskOutput,
@@ -37,6 +46,29 @@ watch(
   },
   { immediate: true },
 )
+
+watch(isLoading, value => {
+  if (loadingTimer) {
+    clearInterval(loadingTimer)
+    loadingTimer = null
+  }
+
+  if (!value) {
+    loadingElapsedSeconds.value = 0
+    return
+  }
+
+  loadingElapsedSeconds.value = 0
+  loadingTimer = setInterval(() => {
+    loadingElapsedSeconds.value += 1
+  }, 1000)
+})
+
+onBeforeUnmount(() => {
+  if (loadingTimer) {
+    clearInterval(loadingTimer)
+  }
+})
 
 const priorityLabelMap = {
   high: '高',
@@ -124,22 +156,119 @@ const totalEstimatedTimeLabel = computed(() =>
   totalEstimatedMinutes.value === null ? null : formatMinutesLabel(totalEstimatedMinutes.value),
 )
 
+const footerTotalEstimatedTimeLabel = computed(
+  () =>
+    structuredTaskOutput.value?.summary_metrics.total_estimated_time_text
+    ?? totalEstimatedTimeLabel.value
+    ?? '待確認',
+)
+
+const footerDailyTimeBudgetLabel = computed(
+  () => structuredTaskOutput.value?.summary_metrics.daily_time_budget_text ?? '待確認',
+)
+
+const footerEstimatedCompletionLabel = computed(
+  () => structuredTaskOutput.value?.summary_metrics.estimated_completion_text ?? '待確認',
+)
+
 const visibleMainTasks = computed<StructuredMainTaskOutput[]>(() => structuredTaskOutput.value?.main_tasks ?? [])
+
+const formatMessageTime = (timestamp?: string): string => {
+  if (!timestamp) return '--:--'
+
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return '--:--'
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
+const formatLoadingElapsed = (seconds: number): string => {
+  if (seconds < 60) {
+    return `${seconds} 秒`
+  }
+
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes} 分 ${remainingSeconds} 秒`
+}
+
+const getMessageRoleLabel = (message: Message): string => {
+  if (message.type === 'user') return '你'
+  if (message.type === 'ai') return '助手'
+  return '系統'
+}
 </script>
 
 <template>
   <div class="app-container">
     <!-- 左側聊天區 -->
     <div class="chat-section">
+      <div class="chat-header">
+        <div class="chat-header-brand">
+          <div class="chat-brand-mark" aria-hidden="true">
+            <ClipboardDocumentCheckIcon class="ui-icon ui-icon-brand" />
+          </div>
+          <div>
+            <div class="chat-title-row">
+              <h1>任務規劃助手</h1>
+              <span class="beta-badge">beta</span>
+            </div>
+            <p>您的學習與專案規劃夥伴</p>
+          </div>
+        </div>
+
+        <div class="chat-header-actions">
+          <button class="header-action-button" type="button" @click="noop" aria-label="切換語言">
+            <LanguageIcon class="ui-icon" />
+            <span>中文</span>
+            <ChevronDownIcon class="ui-icon ui-icon-inline" />
+          </button>
+          <button class="header-action-button icon-only-button" type="button" @click="noop" aria-label="切換主題">
+            <SunIcon class="ui-icon" />
+          </button>
+        </div>
+      </div>
+
       <div v-if="isInitializing" class="initializing-state">
         <p>正在初始化對話...</p>
       </div>
       <div v-else class="chat-messages">
         <div v-for="message in messages" :key="message.id" :class="['message', message.type]">
-          {{ message.content }}
+          <div class="message-shell">
+            <div class="message-avatar" :class="`avatar-${message.type}`">
+              <UserCircleIcon v-if="message.type === 'user'" class="message-avatar-icon" />
+              <CpuChipIcon v-else class="message-avatar-icon" />
+            </div>
+            <div class="message-body">
+              <div class="message-meta-row">
+                <span class="message-role">{{ getMessageRoleLabel(message) }}</span>
+                <span class="message-time">{{ formatMessageTime(message.timestamp) }}</span>
+              </div>
+              <div class="message-bubble">
+                {{ message.content }}
+              </div>
+            </div>
+          </div>
         </div>
         <div v-if="isLoading" class="message ai loading">
-          AI 正在思考中...
+          <div class="message-shell">
+            <div class="message-avatar avatar-ai">
+              <CpuChipIcon class="message-avatar-icon" />
+            </div>
+            <div class="message-body">
+              <div class="message-meta-row">
+                <span class="message-role">助手</span>
+                <span class="message-time">處理中</span>
+              </div>
+              <div class="message-bubble">
+                AI 正在思考中，已等待 {{ formatLoadingElapsed(loadingElapsedSeconds) }}...
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="chat-input">
@@ -159,14 +288,10 @@ const visibleMainTasks = computed<StructuredMainTaskOutput[]>(() => structuredTa
     <!-- 右側規劃面板 -->
     <div class="planning-panel">
       <div class="planning-panel-header">
-        <div>
-          <h2>任務規劃面板</h2>
-        </div>
-
-        <div v-if="isDev" class="planning-dev-tools">
-          <button class="planning-dev-button" type="button" @click="loadMockPlanningPreview">
-            載入 mock 規劃
-          </button>
+        <div class="planning-header-copy">
+          <div class="planning-header-title-row">
+            <h2>任務規劃面板</h2>
+          </div>
         </div>
       </div>
 
@@ -178,7 +303,9 @@ const visibleMainTasks = computed<StructuredMainTaskOutput[]>(() => structuredTa
       <div v-else class="planning-content">
         <div class="planning-summary-card">
           <div class="planning-summary-header">
-            <div class="planning-summary-icon" aria-hidden="true"></div>
+            <div class="planning-summary-icon" aria-hidden="true">
+              <CheckBadgeIcon class="ui-icon ui-icon-brand" />
+            </div>
             <div>
               <p class="planning-summary-title">規劃總結 Summary</p>
               <p class="planning-summary-text">{{ structuredTaskOutput.plan_summary }}</p>
@@ -205,11 +332,11 @@ const visibleMainTasks = computed<StructuredMainTaskOutput[]>(() => structuredTa
               <div class="plan-time-block">
                 <span class="plan-time-label">預估時間</span>
                 <div class="plan-time-row">
-                  <span class="time-icon" aria-hidden="true">◔</span>
+                  <ClockIcon class="time-icon-svg" />
                   <span class="plan-time">{{ normalizeEstimatedTimeLabel(mainTask.estimated_time) }}</span>
                 </div>
               </div>
-              <span class="task-expand-indicator" :class="{ open: isTaskExpanded(mainTask.order) }">⌄</span>
+              <ChevronDownIcon class="task-expand-indicator" :class="{ open: isTaskExpanded(mainTask.order) }" />
             </div>
           </button>
 
@@ -236,7 +363,7 @@ const visibleMainTasks = computed<StructuredMainTaskOutput[]>(() => structuredTa
                   <p class="subtask-description">{{ subtask.description }}</p>
                 </div>
                 <div class="subtask-time-box">
-                  <span class="time-icon" aria-hidden="true">◔</span>
+                  <ClockIcon class="time-icon-svg" />
                   <span class="subtask-time">{{ normalizeEstimatedTimeLabel(subtask.estimated_time) }}</span>
                 </div>
               </div>
@@ -246,13 +373,23 @@ const visibleMainTasks = computed<StructuredMainTaskOutput[]>(() => structuredTa
         </div>
 
         <div class="planning-footer">
-          <div v-if="totalEstimatedTimeLabel" class="planning-footer-item">
-            <span class="footer-icon" aria-hidden="true">◔</span>
-            <span>總預估時間：{{ totalEstimatedTimeLabel }}</span>
+          <div class="planning-footer-item">
+            <ClockIcon class="footer-icon" />
+            <span>總預估時間：{{ footerTotalEstimatedTimeLabel }}</span>
           </div>
-          <div class="plan-title-block">
-            <span class="footer-icon" aria-hidden="true">◷</span>
-            <span>已整理 {{ visibleMainTasks.length }} 個主要任務</span>
+          <div class="planning-footer-item">
+            <ClockIcon class="footer-icon" />
+            <span>每日投入：{{ footerDailyTimeBudgetLabel }}</span>
+          </div>
+          <div class="planning-footer-item">
+            <CalendarDaysIcon class="footer-icon" />
+            <span>預計完成：{{ footerEstimatedCompletionLabel }}</span>
+          </div>
+          <div class="planning-footer-actions">
+            <button class="planning-export-button" type="button" @click="noop">
+              <ArrowDownTrayIcon class="footer-icon footer-icon-button" />
+              <span>匯出計畫</span>
+            </button>
           </div>
         </div>
       </div>

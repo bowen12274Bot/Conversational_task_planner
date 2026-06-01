@@ -7,7 +7,8 @@ const CONVERSATION_ID_KEY = 'conversation_id'
 export const DEFAULT_WELCOME_MESSAGE: Message = {
   id: 1,
   type: 'system',
-  content: '歡迎使用對話式任務規劃系統！請輸入您的作業或小專題目標。'
+  content: '歡迎使用對話式任務規劃系統！請輸入您的作業或小專題目標。',
+  timestamp: new Date().toISOString(),
 }
 
 export function getDefaultMessages(): Message[] {

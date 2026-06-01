@@ -79,7 +79,8 @@ When deciding confirmed information, prioritize content clearly supported by use
 Do not invent deadlines, progress, or constraints that were not stated.
 
 Read the current raw requirement together with the prior conversation history, then build a refreshed requirement_context, known_information, and pending_confirmation for this turn.
-If prior user-provided facts are still relevant and not contradicted, carry them forward.
+If prior user-provided facts are still relevant and not contradicted, explicitly keep them in known_information for the current turn instead of dropping them.
+When a previous user message has already established task type, deadline, time budget, progress, difficulty, or constraint information and the current turn does not replace or conflict with it, preserve that information in known_information while adding the new details from the current turn.
 If the current raw requirement clearly corrects or updates prior information, use the current raw requirement as the new source of truth.
 If the current raw requirement conflicts with prior history but the correction is unclear, do not force a resolution; move the conflicting item into pending_confirmation instead.
 
@@ -242,7 +243,8 @@ Do not create new labels.
 不可捏造使用者未提及的期限、進度或限制條件。
 
 請同時閱讀本輪最新需求與先前對話歷史，並為本輪建立一份更新後的 requirement_context、known_information 與 pending_confirmation。
-若歷史中由使用者提供的資訊仍然相關，且未被本輪輸入推翻，應延續保留。
+若歷史中由使用者提供的資訊仍然相關，且未被本輪輸入推翻，應明確保留在本輪的 known_information 中，而不是在重整時遺失。
+如果先前使用者訊息已經建立了 task type、deadline、time budget、progress、difficulty 或 constraint，而本輪輸入沒有取代或衝突，則應在加入本輪新細節的同時，持續將這些資訊保留在 known_information 中。
 若本輪輸入清楚表示是在更正或更新先前資訊，應以本輪內容作為新的事實基準。
 若本輪輸入與歷史內容衝突，但無法明確判斷是否為更正，則不要強行決定，應將衝突項目放入 pending_confirmation。
 

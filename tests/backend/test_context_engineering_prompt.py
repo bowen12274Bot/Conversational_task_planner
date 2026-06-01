@@ -10,6 +10,7 @@ def test_build_context_engineering_ai_request_contains_sectioned_input_data() ->
     assert request.task_type == "context_engineering"
     assert request.input_data["rules"]
     assert request.input_data["task"]
+    assert "explicitly keep them in known_information" in request.input_data["task"]
     assert "Current raw requirement:" in request.input_data["context"]
     assert "我要整理下週的 API 串接工作" in request.input_data["context"]
     assert request.input_data["examples"]

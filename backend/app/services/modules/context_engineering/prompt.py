@@ -138,7 +138,8 @@ def _build_task_description() -> str:
     return (
         "Read the current raw requirement together with the prior conversation history, "
         "then build a refreshed requirement_context, known_information, and pending_confirmation for this turn. "
-        "If prior user-provided facts are still relevant and not contradicted, carry them forward. "
+        "If prior user-provided facts are still relevant and not contradicted, explicitly keep them in known_information for the current turn instead of dropping them. "
+        "When a previous user message has already established task type, deadline, time budget, progress, difficulty, or constraint information and the current turn does not replace or conflict with it, preserve that information in known_information while adding the new details from the current turn. "
         "If the current raw requirement clearly corrects or updates prior information, use the current raw requirement as the new source of truth. "
         "If the current raw requirement conflicts with prior history but the correction is unclear, do not force a resolution; "
         "move the conflicting item into pending_confirmation instead."

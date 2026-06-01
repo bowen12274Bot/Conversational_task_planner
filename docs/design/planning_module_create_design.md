@@ -46,7 +46,7 @@
 - `requirement_context`
 - `known_information`
 - `pending_confirmation`
-- `history_context_summary`
+- `conversation_history_text`
 
 其中：
 
@@ -56,8 +56,8 @@
   - 目前可直接採信的已知資訊
 - `pending_confirmation`
   - 尚未確認、但可能影響規劃精度的資訊
-- `history_context_summary`
-  - 與本次需求相關的歷史脈絡內容；現階段可先視為選用資料
+- `conversation_history_text`
+  - 與本次需求相關的完整歷史對話內容；現階段可先視為選用資料
 
 ---
 
@@ -70,7 +70,7 @@
 - `requirement_context` 作為本次規劃的主任務背景
 - `known_information` 作為規劃依據
 - `pending_confirmation` 作為待確認缺口，不可直接當成已知事實
-- 若 `history_context_summary` 可取得，則作為補充背景提供給 AI
+- 若 `conversation_history_text` 可取得，則作為補充背景提供給 AI
 
 也就是說，AI 必須能清楚分辨：
 
@@ -113,11 +113,13 @@
 - `plan_summary`
   - 簡要說明本次規劃的整體安排方向
 - `design_rationale`
-  - 說明本次規劃為何這樣安排
+  - 以單一字串說明本次規劃為何這樣安排
 - `assumptions_used`
   - 列出本次規劃實際採用的假設資訊；若無假設則回傳空列表
-- 規劃排程結構
-  - 目前直接依 `main_tasks` 為最外層的排程核心結構回傳
+- `schedule`
+  - 規劃排程結構物件，內部以 `main_tasks` 為最外層的排程核心結構回傳
+
+其中 `structured_task_output` 並不直接等於完整 `Planning Module` 輸出，而是由控制層承接 `schedule` 後，再交由 `Output Structuring Module` 整理為後續輸出流程使用的排程結構資料。
 
 排程核心結構的正式欄位定義可參考：
 
@@ -129,7 +131,7 @@
 
 在實作層面，`create planning` 可理解為至少包含以下處理段落：
 
-1. 承接 `requirement_context`、`known_information`、`pending_confirmation` 與可選的 `history_context_summary`
+1. 承接 `requirement_context`、`known_information`、`pending_confirmation` 與可選的 `conversation_history_text`
 2. 整理成 AI 可理解的規劃任務描述
 3. 呼叫 AI 生成規劃結果
 4. 驗證 AI 是否回傳規劃摘要、規劃理由、假設資訊與排程結構

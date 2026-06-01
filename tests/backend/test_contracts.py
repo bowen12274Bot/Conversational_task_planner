@@ -9,6 +9,9 @@ from app.schemas.ai_service_contracts import (
     ProviderRequestData,
 )
 from app.schemas.module_contracts import (
+    PlanningCreateInput,
+    PlanningCreateOutput,
+    PlanningSchedule,
     QuestioningDecision,
     ResponseOutput,
 )
@@ -90,3 +93,21 @@ def test_ai_service_internal_contracts_keep_expected_shapes() -> None:
     assert prompt_output.prompt_text == "test prompt"
     assert execution_config.provider_id == "ai_studio"
     assert provider_request.execution_config.timeout_seconds == 30
+
+
+def test_planning_create_contracts_keep_expected_shapes() -> None:
+    planning_input = PlanningCreateInput(
+        requirement_context="使用者希望在 7 天內完成 Java 作業，目前尚未開始。",
+        known_information=[],
+        pending_confirmation=[],
+        conversation_history_text=None,
+    )
+    planning_output = PlanningCreateOutput(
+        plan_summary="先確認需求，再完成核心功能與測試。",
+        design_rationale="目前期限與任務目標已明確，因此可直接建立初步規劃。",
+        assumptions_used=[],
+        schedule=PlanningSchedule(main_tasks=[]),
+    )
+
+    assert planning_input.requirement_context.startswith("使用者希望")
+    assert planning_output.schedule.main_tasks == []

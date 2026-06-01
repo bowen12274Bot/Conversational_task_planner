@@ -32,7 +32,7 @@ def test_evaluate_questioning_need_returns_follow_up_when_minimum_basis_is_missi
                 "question_hint": "預計什麼時候要完成？",
             }
         ],
-        history_context_summary=None,
+        conversation_history_text=None,
     )
 
     result = questioning_service.evaluate_questioning_need(
@@ -68,7 +68,7 @@ def test_evaluate_questioning_need_returns_planning_when_pending_only_affects_pr
                 "question_hint": "每天大約可投入多少時間？",
             }
         ],
-        history_context_summary=None,
+        conversation_history_text=None,
     )
 
     result = questioning_service.evaluate_questioning_need(
@@ -104,7 +104,7 @@ def test_evaluate_questioning_need_returns_follow_up_when_pending_is_high_value_
                 "question_hint": "目前已經完成到哪裡？",
             }
         ],
-        history_context_summary=None,
+        conversation_history_text=None,
     )
 
     result = questioning_service.evaluate_questioning_need(
@@ -131,7 +131,7 @@ def test_evaluate_questioning_need_can_still_follow_up_when_pending_is_empty_wit
             {"label": "deadline_hint", "value": "7 天內"},
         ],
         pending_confirmation=[],
-        history_context_summary=None,
+        conversation_history_text=None,
     )
 
     result = questioning_service.evaluate_questioning_need(

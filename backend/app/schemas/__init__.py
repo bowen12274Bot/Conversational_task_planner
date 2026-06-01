@@ -29,6 +29,11 @@ from app.schemas.flow_contracts import (
 )
 from app.schemas.module_contracts import (
     ContextEngineeringOutput,
+    PlanningCreateInput,
+    PlanningCreateOutput,
+    PlanningMainTask,
+    PlanningSchedule,
+    PlanningSubtask,
     QuestioningDecision,
     RequirementInput,
     ResponseOutput,
@@ -37,6 +42,11 @@ from app.schemas.module_contracts import (
 __all__ = [
     "AIToModuleResult",
     "ContextEngineeringOutput",
+    "PlanningCreateInput",
+    "PlanningCreateOutput",
+    "PlanningMainTask",
+    "PlanningSchedule",
+    "PlanningSubtask",
     "ControllerFlowState",
     "ControllerToFrontendResponse",
     "ControllerToResponseData",

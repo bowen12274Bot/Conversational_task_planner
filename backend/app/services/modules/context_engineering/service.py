@@ -25,10 +25,10 @@ def build_context_from_raw_input(
     if not normalized_input:
         raise ValueError("user_input 不可為空白。")
 
-    history_context_summary = _load_history_context_summary(conversation_id)
+    conversation_history_text = _load_conversation_history_text(conversation_id)
     ai_request = build_context_engineering_ai_request(
         normalized_input,
-        conversation_history_text=history_context_summary,
+        conversation_history_text=conversation_history_text,
     )
     retry_count = 0
     last_failure_reason = "unknown_error"
@@ -39,7 +39,7 @@ def build_context_from_raw_input(
         parse_result, failure_reason, failure_details = _parse_context_engineering_result(
             ai_result=ai_result,
             user_input=normalized_input,
-            history_context_summary=history_context_summary,
+            conversation_history_text=conversation_history_text,
         )
 
         if parse_result is None:
@@ -57,7 +57,7 @@ def build_context_from_raw_input(
     )
 
 
-def _load_history_context_summary(conversation_id: str | None) -> str | None:
+def _load_conversation_history_text(conversation_id: str | None) -> str | None:
     """依 conversation_id 載入聚合後的完整歷史文字內容。"""
 
     if conversation_id is None or not conversation_id.strip():
@@ -69,7 +69,7 @@ def _load_history_context_summary(conversation_id: str | None) -> str | None:
 def _parse_context_engineering_result(
     ai_result: AIToModuleResult,
     user_input: str,
-    history_context_summary: str | None = None,
+    conversation_history_text: str | None = None,
 ) -> tuple[ContextEngineeringOutput | None, str, dict[str, Any]]:
     """將 AI 回傳結果整理為 ContextEngineeringOutput。"""
 
@@ -105,7 +105,7 @@ def _parse_context_engineering_result(
         requirement_context=requirement_context.strip(),
         known_information=known_information,
         pending_confirmation=pending_confirmation,
-        history_context_summary=history_context_summary,
+        conversation_history_text=conversation_history_text,
     ), "accept", {}
 
 

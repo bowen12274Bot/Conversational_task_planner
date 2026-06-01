@@ -47,7 +47,7 @@ def test_build_context_from_raw_input_returns_structured_output_when_ai_returns_
     assert result.pending_confirmation == [
         {"label": "time_budget", "question_hint": "每天能投入多久？"}
     ]
-    assert result.history_context_summary == "user: 之前需求\nai: 之前回覆"
+    assert result.conversation_history_text == "user: 之前需求\nai: 之前回覆"
 
 
 def test_build_context_from_raw_input_can_extract_last_json_object_after_analysis_text(
@@ -308,7 +308,7 @@ def test_build_context_from_raw_input_skips_history_lookup_when_conversation_id_
 
     result = context_service.build_context_from_raw_input("我要整理資料庫報告")
 
-    assert result.history_context_summary is None
+    assert result.conversation_history_text is None
     assert history_call_count["value"] == 0
 
 

@@ -2,7 +2,13 @@ from fastapi.testclient import TestClient
 from types import SimpleNamespace
 
 from app.controllers import raw_request_controller as raw_request_module
-from app.schemas import ContextEngineeringOutput, QuestioningDecision, ResponseOutput
+from app.schemas import (
+    ContextEngineeringOutput,
+    PlanningCreateOutput,
+    PlanningSchedule,
+    QuestioningDecision,
+    ResponseOutput,
+)
 
 
 def test_raw_request_requires_conversation_id(client: TestClient) -> None:
@@ -63,7 +69,7 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
             requirement_context="整理後摘要",
             known_information=[],
             pending_confirmation=[{"label": "time_budget", "question_hint": "每天能投入多久？"}],
-            history_context_summary=None,
+            conversation_history_text=None,
         ),
     )
     monkeypatch.setattr(
@@ -145,7 +151,7 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
                 {"label": "deadline_hint", "value": "7 天內"},
             ],
             pending_confirmation=[],
-            history_context_summary=None,
+            conversation_history_text=None,
         ),
     )
     monkeypatch.setattr(
@@ -164,6 +170,34 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
         "reset_follow_up_round_count",
         lambda conversation_id: reset_calls.append(conversation_id),
     )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_initial_planning",
+        lambda planning_input: PlanningCreateOutput(
+            plan_summary="先確認需求，再完成核心功能與測試。",
+            design_rationale="目前期限與任務目標已明確，因此可直接建立初步規劃。",
+            assumptions_used=[],
+            schedule=PlanningSchedule(
+                main_tasks=[
+                    {
+                        "title": "確認需求",
+                        "description": "整理作業要求。",
+                        "estimated_time": "1h",
+                        "order": 1,
+                        "subtasks": [
+                            {
+                                "title": "閱讀題目說明",
+                                "description": "確認題目與限制。",
+                                "priority": "high",
+                                "estimated_time": "30m",
+                                "order": 1,
+                            }
+                        ],
+                    }
+                ]
+            ),
+        ),
+    )
 
     response = client.post(
         "/api/raw-request",
@@ -176,5 +210,6 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     assert response.status_code == 200
     body = response.json()
     assert body["conversation_id"] == "conv-002"
-    assert "規劃分支流程骨架已預留" in body["reply_text"]
+    assert body["reply_text"] == "先確認需求，再完成核心功能與測試。"
+    assert body["structured_task_output"]["main_tasks"][0]["title"] == "確認需求"
     assert reset_calls == ["conv-002"]

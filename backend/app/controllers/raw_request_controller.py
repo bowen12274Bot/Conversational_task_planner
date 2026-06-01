@@ -1,14 +1,18 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.schemas import (
     ContextEngineeringOutput,
     ControllerToFrontendResponse,
     ConversationRecordStoreRequest,
     FrontendToControllerRequest,
+    PlanningCreateInput,
+    PlanningCreateOutput,
     QuestioningDecision,
     ResponseOutput,
 )
 from app.services.modules.context_engineering import build_context_from_raw_input
+from app.services.modules.planning import build_initial_planning
 from app.services.modules.questioning import evaluate_questioning_need
 from app.services.persistence import (
     get_follow_up_round_count,
@@ -33,6 +37,9 @@ class RawRequestFlowContext:
     context_output: ContextEngineeringOutput | None = None
     questioning_decision: QuestioningDecision | None = None
     response_output: ResponseOutput | None = None
+    planning_input: PlanningCreateInput | None = None
+    planning_output: PlanningCreateOutput | None = None
+    structured_task_output: dict[str, Any] | None = None
     current_stage: str = RAW_REQUEST_START_STAGE
     traversed_history: list[str] = field(
         default_factory=lambda: [RAW_REQUEST_START_STAGE]
@@ -67,7 +74,11 @@ class RawRequestController:
             "F005": self._run_stage_f005,
             "F006": self._run_stage_f006,
             "F007": self._run_stage_f007,
-            "F008": self._run_stage_f008_to_f012,
+            "F008": self._run_stage_f008,
+            "F009": self._run_stage_f009,
+            "F010": self._run_stage_f010,
+            "F011": self._run_stage_f011,
+            "F012": self._run_stage_f012,
         }
 
         while True:
@@ -153,22 +164,53 @@ class RawRequestController:
             structured_task_output=None,
         )
 
-    def _run_stage_f008_to_f012(
+    def _run_stage_f008(self, context: RawRequestFlowContext) -> None:
+        reset_follow_up_round_count(context.conversation_id)
+        if context.context_output is None:
+            raise ValueError("context_output 尚未建立。")
+
+        context.planning_input = PlanningCreateInput(
+            requirement_context=context.context_output.requirement_context,
+            known_information=context.context_output.known_information,
+            pending_confirmation=context.context_output.pending_confirmation,
+            conversation_history_text=context.context_output.conversation_history_text,
+        )
+        self._transition(context, next_stage="F009")
+
+    def _run_stage_f009(self, context: RawRequestFlowContext) -> None:
+        if context.planning_input is None:
+            raise ValueError("planning_input 尚未建立。")
+
+        context.planning_output = build_initial_planning(context.planning_input)
+        self._transition(context, next_stage="F010")
+
+    def _run_stage_f010(self, context: RawRequestFlowContext) -> None:
+        if context.planning_output is None:
+            raise ValueError("planning_output 尚未建立。")
+
+        # Output Structuring Module 尚未正式實作，現階段先承接 planning output，
+        # 後續再由獨立模組負責最終整理。
+        context.structured_task_output = context.planning_output.schedule.model_dump()
+        self._transition(context, next_stage="F011")
+
+    def _run_stage_f011(self, context: RawRequestFlowContext) -> None:
+        if context.structured_task_output is None:
+            raise ValueError("structured_task_output 尚未建立。")
+
+        # Output Structuring Module 尚未正式接入，F011 目前先保留為最小占位節點。
+        self._transition(context, next_stage="F012")
+
+    def _run_stage_f012(
         self,
         context: RawRequestFlowContext,
     ) -> ControllerToFrontendResponse:
-        reset_follow_up_round_count(context.conversation_id)
-        # 因規劃分支尚未細化設計，F008-F012 目前先以簡略骨架表示。
-        for stage in ("F009", "F010", "F011", "F012"):
-            context.traversed_history.append(stage)
-        context.current_stage = "F012"
+        if context.planning_output is None:
+            raise ValueError("planning_output 尚未建立。")
+
         return ControllerToFrontendResponse(
-            reply_text=(
-                "目前 raw_request 規劃分支流程骨架已預留，"
-                "但尚未接入實際規劃與輸出模組。"
-            ),
+            reply_text=context.planning_output.plan_summary,
             conversation_id=context.conversation_id,
-            structured_task_output=None,
+            structured_task_output=context.structured_task_output,
         )
 
     def _transition(

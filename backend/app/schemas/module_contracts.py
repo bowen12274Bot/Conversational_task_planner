@@ -19,8 +19,8 @@ class ContextEngineeringOutput(BaseModel):
     known_information: list[dict[str, Any]] = Field(default_factory=list)
     # 仍待確認、暫不直接採用的資訊集合。
     pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
-    # 與目前需求相關的歷史脈絡摘要。
-    history_context_summary: str | None = None
+    # 與目前需求相關的完整歷史對話內容。
+    conversation_history_text: str | None = None
 
 
 class QuestioningDecision(BaseModel):
@@ -36,6 +36,50 @@ class QuestioningDecision(BaseModel):
     pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
     # 下一步建議內容，依 decision 語意解讀。
     next_step_guidance: list[str] = Field(default_factory=list)
+
+
+class PlanningSubtask(BaseModel):
+    """排程核心結構中的子任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    priority: Literal["high", "medium", "low"]
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+
+
+class PlanningMainTask(BaseModel):
+    """排程核心結構中的主任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+    subtasks: list[PlanningSubtask] = Field(default_factory=list)
+
+
+class PlanningSchedule(BaseModel):
+    """Planning Module 排程結果的核心結構。"""
+
+    main_tasks: list[PlanningMainTask] = Field(default_factory=list)
+
+
+class PlanningCreateInput(BaseModel):
+    """提供 `Planning Module` 建立初步規劃時使用的輸入資料。"""
+
+    requirement_context: str = Field(..., min_length=1)
+    known_information: list[dict[str, Any]] = Field(default_factory=list)
+    pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_history_text: str | None = None
+
+
+class PlanningCreateOutput(BaseModel):
+    """由 `Planning Module` 建立介面產出的初步規劃結果。"""
+
+    plan_summary: str = Field(..., min_length=1)
+    design_rationale: str = Field(..., min_length=1)
+    assumptions_used: list[str] = Field(default_factory=list)
+    schedule: PlanningSchedule
 
 
 class ResponseOutput(BaseModel):

@@ -18,6 +18,10 @@
   - 資料庫規格
   - 用於整理資料表實體、欄位方向與持久化資料結構
 
+- [prompt_specs/](./prompt_specs/README.md)
+  - Prompt 規格
+  - 用於整理各 AI 模組的 prompt 原文、中文對照與相關規則說明
+
 - [ai_service_architecture.md](./ai_service_architecture.md)
   - AI 服務層架構規範
   - 用於整理 AI service layer 的架構定位、分工、核心功能、Provider 與模型使用方式

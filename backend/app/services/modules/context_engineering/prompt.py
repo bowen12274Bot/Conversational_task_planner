@@ -104,13 +104,8 @@ def _build_format_requirements() -> dict[str, Any]:
             "requirement_context must be a concise string summary of the current requirement and current situation.",
             "known_information must be a list of objects containing only information clearly supported by the current raw requirement or prior user messages that are still relevant.",
             "pending_confirmation must be a list of objects for important missing, unclear, or conflicting information that should be clarified later.",
-            "If prior user-provided information is still relevant and not contradicted, carry it forward into the refreshed result.",
-            "If the current raw requirement clearly corrects or updates prior information, update known_information accordingly.",
-            "If the current raw requirement conflicts with prior history but the correction is unclear, place the conflicting item in pending_confirmation instead of treating it as confirmed.",
-            "If a previously missing or uncertain item is now clearly supported by the current raw requirement or prior user messages, move it into known_information.",
             "Use label and value for each known_information item.",
             "Use label and question_hint for each pending_confirmation item.",
-            "Do not treat prior AI replies as confirmed facts unless they are clearly supported by user messages.",
             "Do not invent deadlines, progress, constraints, or difficulties that were not stated by the user.",
             "Return an empty list when there is no suitable item for known_information or pending_confirmation.",
         ],
@@ -130,9 +125,9 @@ def _build_rules_text() -> str:
     return (
         "You are a requirement analysis assistant. "
         "Use the current raw requirement as the primary input for this turn. "
-        "Use prior conversation history as supporting context only. "
-        "Only extract information supported by user-provided content. "
-        "Do not treat prior AI replies as confirmed facts unless they are clearly supported by user messages. "
+        "Use prior conversation history to help interpret the current turn and preserve relevant known_information and pending_confirmation continuity. "
+        "When deciding confirmed information, prioritize content clearly supported by user messages, "
+        "and treat prior AI replies as contextual references rather than independent confirmed facts. "
         "Do not invent deadlines, progress, or constraints that were not stated."
     )
 
@@ -249,6 +244,45 @@ def _build_examples() -> list[dict[str, Any]]:
                         "question_hint": "實際期限是下週，還是只剩一天",
                     }
                 ],
+            },
+        },
+        {
+            "input": (
+                "Current raw requirement:\n"
+                "已經完成系統架構了，但是模組間的API清單和資料契約還沒決定好。\n\n"
+                "Conversation history:\n"
+                "User: 我要在7天內完成Java作業，我一天只能做2小時。\n"
+                "AI: 為了幫你規劃合適的安排，我想先了解一下目前這份 Java 作業已經完成到哪裡了呢？\n"
+                "User: 已經完成系統架構了，但是模組間的API清單和資料契約還沒決定好。"
+            ),
+            "output": {
+                "requirement_context": (
+                    "使用者想在7天內完成Java作業，每天可投入2小時；"
+                    "目前已完成系統架構，但模組間的API清單與資料契約仍未決定。"
+                ),
+                "known_information": [
+                    {
+                        "label": "task_type",
+                        "value": "Java作業",
+                    },
+                    {
+                        "label": "deadline_hint",
+                        "value": "7天內",
+                    },
+                    {
+                        "label": "time_budget",
+                        "value": "一天2小時",
+                    },
+                    {
+                        "label": "current_progress",
+                        "value": "已完成系統架構",
+                    },
+                    {
+                        "label": "constraint",
+                        "value": "模組間的API清單和資料契約還沒決定好",
+                    },
+                ],
+                "pending_confirmation": [],
             },
         },
     ]

@@ -356,6 +356,48 @@ def test_build_context_from_raw_input_can_merge_multi_turn_history_with_real_ai(
     not (AI_STUDIO_API_KEY or OPENROUTER_API_KEY),
     reason="No real AI provider API key is configured.",
 )
+def test_build_context_from_raw_input_keeps_confirmed_deadline_and_time_budget_across_turns_with_real_ai(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: (
+            "User: 我要在7天內完成java作業，我一天只能做2小時。\n"
+            "AI: 為了幫你規劃合適的安排，我想先了解一下目前這份 Java 作業已經完成到哪裡了呢？\n"
+            "User: 已經完成系統架構了，但是模組間的API清單和資料契約還沒決定好。"
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "已經完成系統架構了，但是模組間的API清單和資料契約還沒決定好。",
+        conversation_id="conv-001",
+    )
+
+    known_information = {
+        item.get("label"): item.get("value")
+        for item in result.known_information
+        if isinstance(item, dict)
+    }
+    pending_labels = {
+        item.get("label")
+        for item in result.pending_confirmation
+        if isinstance(item, dict)
+    }
+
+    assert known_information.get("task_type")
+    assert known_information.get("deadline_hint")
+    assert "7" in str(known_information.get("deadline_hint"))
+    assert known_information.get("time_budget")
+    assert "2" in str(known_information.get("time_budget"))
+    assert "deadline_hint" not in pending_labels
+    assert "time_budget" not in pending_labels
+
+
+@pytest.mark.skipif(
+    not (AI_STUDIO_API_KEY or OPENROUTER_API_KEY),
+    reason="No real AI provider API key is configured.",
+)
 def test_build_context_from_raw_input_can_apply_explicit_requirement_update_with_real_ai(
     monkeypatch,
 ) -> None:

@@ -24,6 +24,7 @@ def test_build_planning_create_ai_request_contains_expected_sections() -> None:
     assert request.input_data["examples"]
     assert request.input_data["output_target"]
     assert "one raw JSON object only" in request.input_data["rules"]
+    assert "keep the total schedule within that capacity" in request.input_data["rules"]
     assert "without any additional commentary" in request.input_data["task"]
 
 
@@ -43,6 +44,10 @@ def test_build_planning_create_ai_request_contains_format_requirements() -> None
         "schedule",
     ]
     assert "Return exactly one JSON object and nothing else." in request.format_requirements["requirements"]
+    assert any(
+        "total estimated effort should remain feasible" in requirement
+        for requirement in request.format_requirements["requirements"]
+    )
 
 
 def test_build_planning_create_prompt_spec_rejects_blank_requirement_context() -> None:

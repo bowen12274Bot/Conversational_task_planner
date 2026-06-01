@@ -44,6 +44,7 @@ export function useConversationSession() {
     messages.value = historyMessages.length > 0
       ? historyMessages
       : getDefaultMessages()
+    structuredTaskOutput.value = history.structured_task_output ?? null
 
     saveConversationCache(messages.value, currentConversationId)
   }
@@ -53,6 +54,7 @@ export function useConversationSession() {
     conversationId.value = await createConversation()
     saveConversationId(conversationId.value)
     messages.value = getDefaultMessages()
+    structuredTaskOutput.value = null
     persistConversationCache()
   }
 

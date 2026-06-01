@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import select
 
 from app.db.models import Conversation
@@ -45,6 +47,11 @@ def get_conversation_history(
         return ConversationHistoryResponse(
             conversation_id=request.conversation_id,
             turns=turns,
+            structured_task_output=(
+                json.loads(conversation.structured_task_output_json)
+                if conversation.structured_task_output_json
+                else None
+            ),
         )
     finally:
         db.close()

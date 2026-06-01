@@ -69,4 +69,6 @@ class ConversationHistoryResponse(BaseModel):
     conversation_id: str = Field(..., min_length=1)
     # 歷史回合資料列表。
     turns: list[ConversationTurn] = Field(default_factory=list)
+    # 該對話目前最新的結構化排程輸出快照。
+    structured_task_output: dict[str, Any] | None = None
 

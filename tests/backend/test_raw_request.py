@@ -129,6 +129,7 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     monkeypatch,
 ) -> None:
     reset_calls: list[str] = []
+    saved_structured_outputs: list[tuple[str, dict[str, object] | None]] = []
 
     monkeypatch.setattr(
         raw_request_module,
@@ -174,6 +175,13 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     )
     monkeypatch.setattr(
         raw_request_module,
+        "save_structured_task_output",
+        lambda conversation_id, structured_task_output: saved_structured_outputs.append(
+            (conversation_id, structured_task_output)
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
         "build_initial_planning",
         lambda planning_input: PlanningCreateOutput(
             plan_summary="先確認需求，再完成核心功能與測試。",
@@ -216,3 +224,4 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     assert body["structured_task_output"]["plan_summary"] == "先確認需求，再完成核心功能與測試。"
     assert body["structured_task_output"]["main_tasks"][0]["title"] == "確認需求"
     assert reset_calls == ["conv-002"]
+    assert saved_structured_outputs == [("conv-002", body["structured_task_output"])]

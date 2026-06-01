@@ -21,6 +21,7 @@ from app.services.persistence import (
     get_follow_up_round_count,
     increment_follow_up_round_count,
     reset_follow_up_round_count,
+    save_structured_task_output,
     store_conversation_record,
 )
 from app.services.modules.response import build_response_from_questioning
@@ -200,6 +201,9 @@ class RawRequestController:
         context.structured_task_output = build_structured_task_output(
             context.planning_output
         ).model_dump()
+        save_structured_task_output(
+            context.conversation_id, context.structured_task_output
+        )
         self._transition(context, next_stage="F012")
 
     def _run_stage_f012(

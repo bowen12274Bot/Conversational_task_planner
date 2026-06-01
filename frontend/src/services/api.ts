@@ -34,6 +34,7 @@ type CreateConversationResponse = {
 
 type ConversationHistoryResponse = {
   conversation_id: string
+  structured_task_output?: StructuredTaskOutput | null
   turns: Array<{
     turn_id: string
     messages: Array<{

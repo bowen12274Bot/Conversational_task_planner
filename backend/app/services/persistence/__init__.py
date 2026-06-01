@@ -13,6 +13,10 @@ from app.services.persistence.get_conversation_transcript import (
 from app.services.persistence.store_conversation_record import (
     store_conversation_record,
 )
+from app.services.persistence.structured_task_output import (
+    get_structured_task_output,
+    save_structured_task_output,
+)
 
 __all__ = [
     "create_conversation",
@@ -21,5 +25,7 @@ __all__ = [
     "get_conversation_transcript",
     "increment_follow_up_round_count",
     "reset_follow_up_round_count",
+    "get_structured_task_output",
+    "save_structured_task_output",
     "store_conversation_record",
 ]

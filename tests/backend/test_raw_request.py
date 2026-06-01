@@ -5,7 +5,9 @@ from app.controllers import raw_request_controller as raw_request_module
 from app.schemas import (
     ContextEngineeringOutput,
     PlanningCreateOutput,
+    PlanningMainTask,
     PlanningSchedule,
+    PlanningSubtask,
     QuestioningDecision,
     ResponseOutput,
 )
@@ -179,21 +181,21 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
             assumptions_used=[],
             schedule=PlanningSchedule(
                 main_tasks=[
-                    {
-                        "title": "確認需求",
-                        "description": "整理作業要求。",
-                        "estimated_time": "1h",
-                        "order": 1,
-                        "subtasks": [
-                            {
-                                "title": "閱讀題目說明",
-                                "description": "確認題目與限制。",
-                                "priority": "high",
-                                "estimated_time": "30m",
-                                "order": 1,
-                            }
+                    PlanningMainTask(
+                        title="確認需求",
+                        description="整理作業要求。",
+                        estimated_time="1h",
+                        order=1,
+                        subtasks=[
+                            PlanningSubtask(
+                                title="閱讀題目說明",
+                                description="確認題目與限制。",
+                                priority="high",
+                                estimated_time="30m",
+                                order=1,
+                            )
                         ],
-                    }
+                    )
                 ]
             ),
         ),
@@ -211,5 +213,6 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     body = response.json()
     assert body["conversation_id"] == "conv-002"
     assert body["reply_text"] == "先確認需求，再完成核心功能與測試。"
+    assert body["structured_task_output"]["plan_summary"] == "先確認需求，再完成核心功能與測試。"
     assert body["structured_task_output"]["main_tasks"][0]["title"] == "確認需求"
     assert reset_calls == ["conv-002"]

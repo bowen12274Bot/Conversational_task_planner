@@ -14,6 +14,9 @@ from app.schemas import (
 from app.services.modules.context_engineering import build_context_from_raw_input
 from app.services.modules.planning import build_initial_planning
 from app.services.modules.questioning import evaluate_questioning_need
+from app.services.modules.output_structuring.service import (
+    build_structured_task_output,
+)
 from app.services.persistence import (
     get_follow_up_round_count,
     increment_follow_up_round_count,
@@ -188,16 +191,15 @@ class RawRequestController:
         if context.planning_output is None:
             raise ValueError("planning_output 尚未建立。")
 
-        # Output Structuring Module 尚未正式實作，現階段先承接 planning output，
-        # 後續再由獨立模組負責最終整理。
-        context.structured_task_output = context.planning_output.schedule.model_dump()
         self._transition(context, next_stage="F011")
 
     def _run_stage_f011(self, context: RawRequestFlowContext) -> None:
-        if context.structured_task_output is None:
-            raise ValueError("structured_task_output 尚未建立。")
+        if context.planning_output is None:
+            raise ValueError("planning_output 尚未建立。")
 
-        # Output Structuring Module 尚未正式接入，F011 目前先保留為最小占位節點。
+        context.structured_task_output = build_structured_task_output(
+            context.planning_output
+        ).model_dump()
         self._transition(context, next_stage="F012")
 
     def _run_stage_f012(

@@ -37,6 +37,9 @@ from app.schemas.module_contracts import (
     QuestioningDecision,
     RequirementInput,
     ResponseOutput,
+    StructuredMainTaskOutput,
+    StructuredSubtaskOutput,
+    StructuredTaskOutput,
 )
 
 __all__ = [
@@ -70,4 +73,7 @@ __all__ = [
     "QuestioningDecision",
     "RequirementInput",
     "ResponseOutput",
+    "StructuredMainTaskOutput",
+    "StructuredSubtaskOutput",
+    "StructuredTaskOutput",
 ]

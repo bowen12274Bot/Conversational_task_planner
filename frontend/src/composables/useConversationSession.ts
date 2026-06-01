@@ -5,7 +5,7 @@ import {
   getConversationHistory,
   sendUserRequest,
 } from '../services/api'
-import type { Message } from '../types/app'
+import type { Message, StructuredTaskOutput } from '../types/app'
 import {
   clearConversationCache,
   getDefaultMessages,
@@ -21,6 +21,7 @@ export function useConversationSession() {
   const isLoading = ref(false)
   const isInitializing = ref(true)
   const conversationId = ref<string | null>(null)
+  const structuredTaskOutput = ref<StructuredTaskOutput | null>(null)
 
   const createMessageId = () =>
     messages.value.reduce((maxId, message) => Math.max(maxId, message.id), 0) + 1
@@ -107,7 +108,11 @@ export function useConversationSession() {
     persistConversationCache()
   }
 
-  const sendMessage = async (): Promise<{ ok: true; inputText: string } | { ok: false }> => {
+  const setStructuredTaskOutput = (value: StructuredTaskOutput | null) => {
+    structuredTaskOutput.value = value
+  }
+
+  const sendMessage = async (): Promise<{ ok: true } | { ok: false }> => {
     if (!userInput.value.trim() || isLoading.value) {
       return { ok: false }
     }
@@ -159,8 +164,9 @@ export function useConversationSession() {
         type: 'ai',
         content: response.reply_text,
       })
+      structuredTaskOutput.value = response.structured_task_output ?? null
       persistConversationCache()
-      return { ok: true, inputText }
+      return { ok: true }
     } catch (error) {
       appendErrorMessage(error)
       return { ok: false }
@@ -179,6 +185,8 @@ export function useConversationSession() {
     isLoading,
     messages,
     sendMessage,
+    setStructuredTaskOutput,
+    structuredTaskOutput,
     userInput,
   }
 }

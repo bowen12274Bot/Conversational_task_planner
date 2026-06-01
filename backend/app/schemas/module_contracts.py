@@ -82,6 +82,33 @@ class PlanningCreateOutput(BaseModel):
     schedule: PlanningSchedule
 
 
+class StructuredSubtaskOutput(BaseModel):
+    """供前端規劃面板顯示的子任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    priority: Literal["high", "medium", "low"]
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+
+
+class StructuredMainTaskOutput(BaseModel):
+    """供前端規劃面板顯示的主任務資料。"""
+
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    estimated_time: str = Field(..., min_length=1)
+    order: int = Field(..., ge=1)
+    subtasks: list[StructuredSubtaskOutput] = Field(default_factory=list)
+
+
+class StructuredTaskOutput(BaseModel):
+    """由 Output Structuring Module 產出的前端排程顯示資料。"""
+
+    plan_summary: str = Field(..., min_length=1)
+    main_tasks: list[StructuredMainTaskOutput] = Field(default_factory=list)
+
+
 class ResponseOutput(BaseModel):
     """由 `Response Module` 根據 `Questioning 判斷結果` 所生成的、適合提供前端顯示的最終回覆內容。"""
 

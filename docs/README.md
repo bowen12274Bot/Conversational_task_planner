@@ -14,7 +14,7 @@
 
 - [module_description.md](./module_description.md)
   - 系統模組說明文件
-  - 包含 Context Engineering、Response、Questioning、Planning、Output Structuring 與 Persistence 等核心模組說明
+  - 包含 Context Engineering、Response、Questioning、Chat、Planning、Output Structuring 與 Persistence 等核心模組說明
 
 - [quick_start.md](./quick_start.md)
   - 快速啟動文件

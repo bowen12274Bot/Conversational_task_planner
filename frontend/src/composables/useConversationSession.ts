@@ -4,8 +4,9 @@ import {
   createConversation,
   getConversationHistory,
   sendUserRequest,
+  subscribeProgressEvents,
 } from '../services/api'
-import type { Message, StructuredTaskOutput } from '../types/app'
+import type { Message, ProgressEvent, ProgressEventType, StructuredTaskOutput } from '../types/app'
 import {
   clearConversationCache,
   getDefaultMessages,
@@ -21,6 +22,7 @@ export function useConversationSession() {
   const isLoading = ref(false)
   const isInitializing = ref(true)
   const conversationId = ref<string | null>(null)
+  const progressStatusText = ref('處理中...')
   const structuredTaskOutput = ref<StructuredTaskOutput | null>(null)
 
   const createMessageId = () =>
@@ -31,6 +33,56 @@ export function useConversationSession() {
   const persistConversationCache = () => {
     saveConversationCache(messages.value, conversationId.value)
   }
+
+  const progressTextMap: Record<ProgressEventType, string> = {
+    request_received: '已收到你的需求',
+    context_engineering_started: '正在整理你的需求與背景資訊',
+    questioning_started: '正在判斷是否需要補充資訊',
+    route_decided: '正在選擇最合適的處理方式',
+    planning_started: '正在建立任務規劃',
+    revision_started: '正在調整既有規劃',
+    chat_started: '正在整理回答內容',
+    response_started: '正在準備回覆',
+    completed: '處理完成',
+    failed: '處理時發生錯誤',
+  }
+
+  const createRequestId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID()
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+
+  const startProgressStream = (
+    targetConversationId: string,
+    requestId: string,
+  ): EventSource | null => {
+    try {
+      return subscribeProgressEvents(
+        targetConversationId,
+        requestId,
+        (event: ProgressEvent) => {
+          progressStatusText.value = progressTextMap[event.event_type] ?? '處理中...'
+          if (event.event_type === 'completed' || event.event_type === 'failed') {
+            progressStream?.close()
+            progressStream = null
+          }
+        },
+        () => {
+          progressStatusText.value = '處理中...'
+          progressStream?.close()
+          progressStream = null
+        },
+      )
+    } catch (error) {
+      console.error('Failed to start progress stream:', error)
+      return null
+    }
+  }
+
+  let progressStream: EventSource | null = null
 
   const applyHistoryMessages = async (currentConversationId: string) => {
     const history = await getConversationHistory(currentConversationId)
@@ -148,15 +200,22 @@ export function useConversationSession() {
     persistConversationCache()
 
     isLoading.value = true
+    progressStatusText.value = '準備送出需求...'
+    let requestId = createRequestId()
+    progressStream = startProgressStream(conversationId.value, requestId)
 
     try {
       let response
 
       try {
-        response = await sendUserRequest(inputText, conversationId.value)
+        response = await sendUserRequest(inputText, conversationId.value, requestId)
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) {
+          progressStream?.close()
+          progressStream = null
           await rebuildConversation()
+          requestId = createRequestId()
+          progressStream = startProgressStream(conversationId.value!, requestId)
           messages.value.push({
             id: createMessageId(),
             type: 'user',
@@ -164,7 +223,7 @@ export function useConversationSession() {
             timestamp: createTimestamp(),
           })
           persistConversationCache()
-          response = await sendUserRequest(inputText, conversationId.value!)
+          response = await sendUserRequest(inputText, conversationId.value!, requestId)
         } else {
           throw error
         }
@@ -181,14 +240,19 @@ export function useConversationSession() {
         content: response.reply_text,
         timestamp: response.reply_created_at ?? createTimestamp(),
       })
-      structuredTaskOutput.value = response.structured_task_output ?? null
+      if (response.structured_task_output) {
+        structuredTaskOutput.value = response.structured_task_output
+      }
       persistConversationCache()
       return { ok: true }
     } catch (error) {
       appendErrorMessage(error)
       return { ok: false }
     } finally {
+      progressStream?.close()
+      progressStream = null
       isLoading.value = false
+      progressStatusText.value = '處理中...'
     }
   }
 
@@ -201,6 +265,7 @@ export function useConversationSession() {
     isInitializing,
     isLoading,
     messages,
+    progressStatusText,
     resetConversationSession,
     sendMessage,
     setStructuredTaskOutput,

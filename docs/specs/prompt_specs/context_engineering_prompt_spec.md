@@ -1,6 +1,6 @@
 # Context Engineering Prompt 規範
 
-更新日期時間：2026-06-01 14:45:00
+更新日期時間：2026-06-16 00:00:00
 
 本文件將目前 `Context Engineering Module` 在程式中使用的結構化 prompt，整理為一份可閱讀、可討論的自然語言版本，方便後續收斂規則、補範例與檢查多輪整合行為。
 
@@ -39,7 +39,8 @@
     "required_fields": [
       "requirement_context",
       "known_information",
-      "pending_confirmation"
+      "pending_confirmation",
+      "planning_intent"
     ],
     "requirements": [...],
     "allowed_labels": {
@@ -96,11 +97,13 @@ You must return a JSON object with these required fields:
 - requirement_context
 - known_information
 - pending_confirmation
+- planning_intent
 
 Format requirements:
 - requirement_context must be a concise string summary of the current requirement and current situation.
 - known_information must be a list of objects containing only information clearly supported by the current raw requirement or prior user messages that are still relevant.
 - pending_confirmation must be a list of objects for important missing, unclear, or conflicting information that should be clarified later.
+- planning_intent must describe whether the current turn is trying to create a plan, revise an existing plan, ask a plan-related chat question, or something else.
 - Use label and value for each known_information item.
 - Use label and question_hint for each pending_confirmation item.
 - Do not invent deadlines, progress, constraints, or difficulties that were not stated by the user.
@@ -182,10 +185,84 @@ Do not create new labels.
 }
 ```
 
+#### Example 3：針對既有規劃的一般提問
+
+```json
+{
+  "input": "Current raw requirement:\n第三階段的模擬試題有沒有什麼練習方向呢，或是有沒有什麼學習管道可以參考呢\n\nExisting plan outline:\n1. 第一階段：基礎建立期\n2. 第二階段：題型強化期\n3. 第三階段：實戰衝刺期",
+  "output": {
+    "requirement_context": "使用者正在針對既有規劃中的第三階段詢問模擬試題練習方向與學習管道，尚未明確要求修改排程。",
+    "known_information": [
+      {
+        "label": "task_type",
+        "value": "針對既有多益準備規劃的第三階段詢問執行建議"
+      }
+    ],
+    "pending_confirmation": [],
+    "planning_intent": {
+      "intent_type": "chat",
+      "target_main_task_order": 3,
+      "confidence": "high"
+    }
+  }
+}
+```
+
+#### Example 4：明確要求修改既有規劃
+
+```json
+{
+  "input": "Current raw requirement:\n幫我把第三階段加上模擬試題練習方向和學習管道\n\nExisting plan outline:\n1. 第一階段：基礎建立期\n2. 第二階段：題型強化期\n3. 第三階段：實戰衝刺期",
+  "output": {
+    "requirement_context": "使用者明確要求將模擬試題練習方向與學習管道加入既有規劃第三階段。",
+    "known_information": [
+      {
+        "label": "task_type",
+        "value": "修改既有規劃第三階段"
+      }
+    ],
+    "pending_confirmation": [],
+    "planning_intent": {
+      "intent_type": "revise",
+      "target_main_task_order": 3,
+      "confidence": "high"
+    }
+  }
+}
+```
+
 這些 examples 目前主要在教模型：
 
 - 基本資訊抽取
 - 不明確期限衝突時，應轉入 `pending_confirmation`
+- 區分「針對規劃提問但不修改」與「明確要求修改既有規劃」
+
+### 關於 planning_intent
+
+`planning_intent` 用於描述本輪輸入與規劃流程的關係，而不是決定是否追問。
+
+建議欄位如下：
+
+```json
+{
+  "intent_type": "create | revise | chat | other",
+  "target_main_task_order": 3,
+  "confidence": "high | medium | low"
+}
+```
+
+其意義如下：
+
+- `create`
+  - 使用者希望建立新的規劃
+- `revise`
+  - 使用者希望修改既有規劃
+- `chat`
+  - 使用者針對目前任務或既有規劃提問，但沒有要求修改排程
+- `other`
+  - 使用者目的不明，或不是目前系統可處理的規劃相關需求
+
+CE 只負責標示意圖線索，不負責判斷資訊是否足夠，也不產生對使用者可見的回答文字。
 
 ### 關於 allowed labels
 
@@ -260,11 +337,13 @@ Do not create new labels.
 - requirement_context
 - known_information
 - pending_confirmation
+- planning_intent
 
 格式要求：
 - requirement_context 必須是對目前需求與目前狀況的精簡字串摘要。
 - known_information 必須是物件列表，而且只能包含由本輪原始需求或仍然有效的歷史使用者訊息所明確支持的資訊。
 - pending_confirmation 必須是物件列表，用來表示重要但尚未確認、模糊或衝突的資訊。
+- planning_intent 必須描述本輪是在建立規劃、修改既有規劃、針對規劃進行一般提問，或屬於其他目的。
 - 每個 known_information 項目必須使用 label 與 value。
 - 每個 pending_confirmation 項目必須使用 label 與 question_hint。
 - 不可捏造使用者未提及的期限、進度、限制或困難點。

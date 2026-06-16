@@ -1,5 +1,9 @@
+import re
+
 from app.schemas import (
     AIToModuleResult,
+    ChatResponseInput,
+    PlanningRevisionResponseInput,
     PlanningResponseInput,
     QuestioningDecision,
     ResponseOutput,
@@ -77,6 +81,95 @@ def build_response_from_planning(
         retry_count += 1
 
     return _build_fallback_planning_response(planning_response_input)
+
+
+def build_response_from_planning_revision(
+    revision_response_input: PlanningRevisionResponseInput,
+) -> ResponseOutput:
+    """根據 planning revision 結果生成對前端可顯示的修改完成回覆。"""
+
+    target_title = revision_response_input.target_main_task_title.strip()
+    revision_summary = revision_response_input.revision_summary.strip().rstrip("。")
+    if not target_title:
+        raise ValueError("revision_response_input.target_main_task_title 不可為空白。")
+    if not revision_summary:
+        raise ValueError("revision_response_input.revision_summary 不可為空白。")
+
+    return ResponseOutput(
+        reply_text=f"已更新「{target_title}」，右側規劃面板已同步調整。{revision_summary}。",
+        response_type="planning_revision_summary",
+    )
+
+
+def build_response_from_chat(
+    chat_response_input: ChatResponseInput,
+) -> ResponseOutput:
+    """根據 Chat Module 結果建立對前端可顯示的自然語言回覆。"""
+
+    answer = _normalize_chat_answer_text(chat_response_input.chat_output.answer)
+    if not answer:
+        raise ValueError("chat_response_input.chat_output.answer 不可為空白。")
+
+    return ResponseOutput(
+        reply_text=answer,
+        response_type="chat_answer",
+    )
+
+
+def _normalize_chat_answer_text(value: str) -> str:
+    """將 Chat 回答中的常見 Markdown-lite 標記整理成可讀純文字。"""
+
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        return ""
+
+    normalized_lines: list[str] = []
+    previous_blank = False
+    for raw_line in normalized.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            if normalized_lines and not previous_blank:
+                normalized_lines.append("")
+            previous_blank = True
+            continue
+
+        line = _normalize_chat_answer_line(line)
+        if not line:
+            continue
+
+        if _looks_like_chat_section_heading(line):
+            line = line[2:].strip()
+            if normalized_lines and not previous_blank:
+                normalized_lines.append("")
+
+        normalized_lines.append(line)
+        previous_blank = False
+
+    return "\n".join(normalized_lines).strip()
+
+
+def _normalize_chat_answer_line(line: str) -> str:
+    line = re.sub(r"^#{1,6}\s*", "", line).strip()
+    line = re.sub(r"^[-*+]\s+", "- ", line)
+    line = re.sub(r"^(\d+)[.)]\s+", r"\1. ", line)
+    line = re.sub(r"\*\*\s*([^*]+?)\s*\*\*", r"\1", line)
+    line = re.sub(r"__\s*([^_]+?)\s*__", r"\1", line)
+    line = re.sub(r"`\s*([^`]+?)\s*`", r"\1", line)
+    line = re.sub(r"(?<!\*)\*(?!\*)", "", line)
+    line = re.sub(r"(?<!_)_(?!_)", "", line)
+    line = re.sub(r"\s{2,}", " ", line)
+    return line.strip()
+
+
+def _looks_like_chat_section_heading(line: str) -> bool:
+    if not line.startswith("- "):
+        return False
+
+    heading_text = line[2:].strip()
+    if not heading_text.endswith((":", "：")):
+        return False
+
+    return len(heading_text) <= 32
 
 
 def _extract_response_text(ai_result: AIToModuleResult) -> str | None:

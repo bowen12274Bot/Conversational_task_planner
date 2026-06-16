@@ -10,6 +10,14 @@ class RequirementInput(BaseModel):
     user_input: str = Field(..., min_length=1)
 
 
+class PlanningIntent(BaseModel):
+    """由 Context Engineering 整理出的規劃意圖線索。"""
+
+    intent_type: Literal["create", "revise", "chat", "other"]
+    target_main_task_order: int | None = Field(default=None, ge=1)
+    confidence: Literal["high", "medium", "low"]
+
+
 class ContextEngineeringOutput(BaseModel):
     """由 `Context Engineering Module` 根據原始需求與歷史脈絡整理出的可用資訊基礎。"""
 
@@ -21,6 +29,8 @@ class ContextEngineeringOutput(BaseModel):
     pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
     # 與目前需求相關的完整歷史對話內容。
     conversation_history_text: str | None = None
+    # 本輪輸入中可觀察到的規劃意圖線索；僅供後續模組判斷，不代表流程決策。
+    planning_intent: PlanningIntent | None = None
 
 
 class QuestioningDecision(BaseModel):
@@ -82,6 +92,81 @@ class PlanningCreateOutput(BaseModel):
     schedule: PlanningSchedule
 
 
+class PlanningRevisionInput(BaseModel):
+    """提供 `Planning Module` 修改既有規劃時使用的輸入資料。"""
+
+    requirement_context: str = Field(..., min_length=1)
+    known_information: list[dict[str, Any]] = Field(default_factory=list)
+    pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_history_text: str | None = None
+    existing_plan_outline: list[dict[str, Any]] = Field(default_factory=list)
+    target_main_task: PlanningMainTask
+    target_main_task_order: int = Field(..., ge=1)
+    revision_request: str = Field(..., min_length=1)
+
+
+class PlanningRevisionOutput(BaseModel):
+    """由 `Planning Module` 修改介面產出的局部規劃修改結果。"""
+
+    revision_summary: str = Field(..., min_length=1)
+    design_rationale: str = Field(..., min_length=1)
+    assumptions_used: list[str] = Field(default_factory=list)
+    target_main_task_order: int = Field(..., ge=1)
+    updated_main_task: PlanningMainTask
+
+
+class ChatReferencedPlan(BaseModel):
+    """Chat Module 回答中引用的既有規劃位置。"""
+
+    main_task_order: int | None = Field(default=None, ge=1)
+    subtask_orders: list[str] = Field(default_factory=list)
+
+
+class ChatSuggestedFollowUpAction(BaseModel):
+    """Chat Module 回答後可提供的後續操作提示。"""
+
+    action_type: Literal["revise_plan", "ask_more"]
+    label: str = Field(..., min_length=1)
+
+
+class ChatModuleInput(BaseModel):
+    """提供 `Chat Module` 回答規劃相關問題時使用的輸入資料。"""
+
+    raw_requirement: str = Field(..., min_length=1)
+    requirement_context: str = Field(..., min_length=1)
+    planning_intent: PlanningIntent
+    known_information: list[dict[str, Any]] = Field(default_factory=list)
+    pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_history_text: str | None = None
+    existing_plan_outline: list[dict[str, Any]] = Field(default_factory=list)
+    structured_task_output: dict[str, Any] | None = None
+
+
+class ChatModuleOutput(BaseModel):
+    """由 `Chat Module` 產出的規劃相關問答結果。"""
+
+    answer_types: list[
+        Literal[
+            "plan_explanation",
+            "execution_advice",
+            "resource_suggestion",
+            "risk_analysis",
+            "general_answer",
+        ]
+    ] = Field(..., min_length=1, max_length=3)
+    answer: str = Field(..., min_length=1)
+    referenced_plan: ChatReferencedPlan | None = None
+    suggested_follow_up_actions: list[ChatSuggestedFollowUpAction] = Field(
+        default_factory=list
+    )
+
+
+class ChatResponseInput(BaseModel):
+    """提供 `Response Module` 包裝 Chat Module 回答時使用的輸入資料。"""
+
+    chat_output: ChatModuleOutput
+
+
 class StructuredSubtaskOutput(BaseModel):
     """供前端規劃面板顯示的子任務資料。"""
 
@@ -126,10 +211,24 @@ class PlanningResponseInput(BaseModel):
     structured_task_output: StructuredTaskOutput
 
 
+class PlanningRevisionResponseInput(BaseModel):
+    """提供 `Response Module` 在 planning revision 路徑生成最終回覆時使用的輸入資料。"""
+
+    revision_summary: str = Field(..., min_length=1)
+    design_rationale: str = Field(..., min_length=1)
+    target_main_task_title: str = Field(..., min_length=1)
+    structured_task_output: StructuredTaskOutput
+
+
 class ResponseOutput(BaseModel):
     """由 `Response Module` 根據 `Questioning 判斷結果` 所生成的、適合提供前端顯示的最終回覆內容。"""
 
     # 適合直接顯示給使用者的回覆文字。
     reply_text: str = Field(..., min_length=1)
     # 回覆在互動流程中的類型。
-    response_type: Literal["follow_up_question", "planning_summary"]
+    response_type: Literal[
+        "follow_up_question",
+        "planning_summary",
+        "planning_revision_summary",
+        "chat_answer",
+    ]

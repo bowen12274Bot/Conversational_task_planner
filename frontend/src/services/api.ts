@@ -1,4 +1,4 @@
-import type { StructuredTaskOutput } from '../types/app'
+import type { ProgressEvent, ProgressEventType, StructuredTaskOutput } from '../types/app'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
@@ -57,11 +57,15 @@ export async function getPingMessage(): Promise<string> {
   return data.message
 }
 
-export async function sendUserRequest(userInput: string, conversationId: string): Promise<ControllerToFrontendResponse> {
+export async function sendUserRequest(
+  userInput: string,
+  conversationId: string,
+  requestId?: string,
+): Promise<ControllerToFrontendResponse> {
   const payload: FrontendToControllerRequest = {
     user_input: userInput,
     conversation_id: conversationId,
-    interaction_info: {}
+    interaction_info: requestId ? { request_id: requestId } : {}
   }
 
   const response = await fetch(`${API_BASE_URL}/api/raw-request`, {
@@ -77,6 +81,46 @@ export async function sendUserRequest(userInput: string, conversationId: string)
   }
 
   return (await response.json()) as ControllerToFrontendResponse
+}
+
+const progressEventTypes: ProgressEventType[] = [
+  'request_received',
+  'context_engineering_started',
+  'questioning_started',
+  'route_decided',
+  'planning_started',
+  'revision_started',
+  'chat_started',
+  'response_started',
+  'completed',
+  'failed',
+]
+
+export function subscribeProgressEvents(
+  conversationId: string,
+  requestId: string,
+  onProgress: (event: ProgressEvent) => void,
+  onError?: () => void,
+): EventSource {
+  const url = new URL(`${API_BASE_URL}/api/conversations/${conversationId}/events`)
+  url.searchParams.set('request_id', requestId)
+  const eventSource = new EventSource(url.toString())
+
+  progressEventTypes.forEach(eventType => {
+    eventSource.addEventListener(eventType, event => {
+      try {
+        const parsedEvent = JSON.parse((event as MessageEvent).data) as ProgressEvent
+        onProgress(parsedEvent)
+      } catch (error) {
+        console.error('Failed to parse progress event:', error)
+      }
+    })
+  })
+  eventSource.onerror = () => {
+    onError?.()
+  }
+
+  return eventSource
 }
 
 export async function createConversation(): Promise<string> {

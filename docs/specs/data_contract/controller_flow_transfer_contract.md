@@ -30,7 +30,7 @@
 ### 名詞定義
 
 - `下一步目標`
-  - 指控制層根據目前流程狀態所決定的下一個處理方向，例如進入 `Response Module` 或進入規劃相關處理。
+  - 指控制層根據目前流程狀態所決定的下一個處理方向，例如進入 `Response Module`、`Planning Module` 或 `Chat Module`。
 
 ---
 
@@ -54,7 +54,21 @@
 
 - 此資料物件的內容會依所在流程階段與下一步目標而改變
 - 此資料物件的重點在於轉交資料，而不是重新定義上游模組結果
-- 可用於轉交至文字輸出相關模組或規劃相關模組
+- 可用於轉交至文字輸出相關模組、規劃相關模組或規劃相關問答模組
+
+### Chat 路線控制原則
+
+當 `Context Engineering Module` 標示本輪意圖為 `chat`，且 `Questioning Module` 判斷資訊足以回答時，控制層可將本輪資料轉交給 `Chat Module`。
+
+此路線應遵守下列原則：
+
+- 不呼叫 `Planning Module`
+- 不呼叫 `Output Structuring Module`
+- 不更新既有 `structured_task_output`
+- 只保存本輪使用者訊息與 AI 回答訊息
+- 回傳前端時，右側規劃面板應維持既有內容
+
+若目前沒有既有規劃，或使用者問題缺少可回答對象，控制層不應強行進入 Chat Module，應讓 `Questioning Module` 或 `Response Module` 產生安全追問。
 
 ### 名詞定義
 

@@ -25,3 +25,18 @@
 
 - `design/` 資料夾中的文件應標示更新日期時間
 - 更新時間用於表示該設計內容是否仍具參考價值
+
+## 目前主要文件
+
+- [ai_role_design.md](./ai_role_design.md)
+  - 整理 AI 在系統中的角色定位與使用邊界
+- [flow_control_design.md](./flow_control_design.md)
+  - 整理後端流程控制層與 `flow_stage` 設計構想
+- [planning_module_create_design.md](./planning_module_create_design.md)
+  - 整理建立規劃路線的 Planning Module 設計
+- [planning_module_revise_design.md](./planning_module_revise_design.md)
+  - 整理修改規劃路線的 Planning Module 設計
+- [questioning_module_design.md](./questioning_module_design.md)
+  - 整理追問模組的責任與設計方向
+- [chat_module_design.md](./chat_module_design.md)
+  - 整理 Chat Module 的定位、責任邊界與控制層路線

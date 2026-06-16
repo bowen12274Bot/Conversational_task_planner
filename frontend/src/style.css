@@ -309,6 +309,8 @@ code {
   font-size: 0.95rem;
   line-height: 1.6;
   box-shadow: var(--shadow-light);
+  white-space: pre-line;
+  overflow-wrap: break-word;
 }
 
 .message.system .message-bubble {

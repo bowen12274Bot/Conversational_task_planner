@@ -20,6 +20,7 @@
   - [questioning_to_planning_create_contract.md](./questioning_to_planning_create_contract.md)
   - [planning_schedule_structure_contract.md](./planning_schedule_structure_contract.md)
   - [planning_to_response_contract.md](./planning_to_response_contract.md)
+  - [chat_to_response_contract.md](./chat_to_response_contract.md)
   - [output_structuring_to_controller_contract.md](./output_structuring_to_controller_contract.md)
   - [response_to_controller_contract.md](./response_to_controller_contract.md)
   - [module_to_ai_contract.md](./module_to_ai_contract.md)

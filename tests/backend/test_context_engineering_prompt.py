@@ -36,8 +36,29 @@ def test_build_context_engineering_ai_request_contains_format_requirements() -> 
         "requirement_context",
         "known_information",
         "pending_confirmation",
+        "planning_intent",
     ]
+    assert any(
+        "create, revise, chat, or other" in requirement
+        for requirement in request.format_requirements["requirements"]
+    )
     assert request.format_requirements["allowed_labels"]["values"]
+
+
+def test_build_context_engineering_ai_request_includes_existing_plan_outline() -> None:
+    request = build_context_engineering_ai_request(
+        "請問第一階段可以再詳細一點嗎？",
+        existing_plan_outline=[
+            {
+                "order": 1,
+                "title": "第一階段情境重點規劃",
+                "description": "整理高頻情境。",
+            }
+        ],
+    )
+
+    assert "Existing plan outline:" in request.input_data["context"]
+    assert "1. 第一階段情境重點規劃" in request.input_data["context"]
 
 
 def test_build_context_engineering_prompt_spec_rejects_blank_input() -> None:

@@ -1,7 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.controllers.conversation_create_controller import (
     ConversationCreateController,
@@ -20,6 +20,10 @@ from app.schemas import (
     ModuleToAIRequest,
 )
 from app.services.ai_service.service import run_ai_flow
+from app.services.progress_events import (
+    publish_progress_event,
+    subscribe_progress_events,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -84,10 +88,31 @@ def raw_request(payload: FrontendToControllerRequest) -> Any:
             error_stage="controller",
         )
 
+    request_id = _extract_request_id(payload)
+    publish_progress_event(
+        conversation_id=payload.conversation_id,
+        request_id=request_id,
+        event_type="request_received",
+        stage="F001",
+    )
+
     try:
         controller = RawRequestController()
-        return controller.handle_raw_request(payload)
+        result = controller.handle_raw_request(payload)
+        publish_progress_event(
+            conversation_id=payload.conversation_id,
+            request_id=request_id,
+            event_type="completed",
+            stage=getattr(controller, "current_stage", None),
+        )
+        return result
     except ValueError as exc:
+        publish_progress_event(
+            conversation_id=payload.conversation_id,
+            request_id=request_id,
+            event_type="failed",
+            stage="controller",
+        )
         if str(exc) == CONVERSATION_NOT_FOUND_MESSAGE:
             return _error_response(
                 status_code=404,
@@ -100,11 +125,34 @@ def raw_request(payload: FrontendToControllerRequest) -> Any:
             error_stage="controller",
         )
     except Exception as exc:
+        publish_progress_event(
+            conversation_id=payload.conversation_id,
+            request_id=request_id,
+            event_type="failed",
+            stage="controller",
+        )
         return _error_response(
             status_code=500,
             error_message=f"主流程處理時發生錯誤：{exc}",
             error_stage="controller",
         )
+
+
+@router.get("/conversations/{conversation_id}/events")
+async def get_conversation_events(conversation_id: str, request_id: str) -> StreamingResponse:
+    """Subscribe to progress events for one conversation request."""
+
+    return StreamingResponse(
+        subscribe_progress_events(
+            conversation_id=conversation_id,
+            request_id=request_id,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get(
@@ -146,3 +194,10 @@ def get_conversation_history(conversation_id: str) -> Any:
 @router.post("/ai-test", response_model=AIToModuleResult)
 def ai_test(payload: ModuleToAIRequest) -> AIToModuleResult:
     return run_ai_flow(payload)
+
+
+def _extract_request_id(payload: FrontendToControllerRequest) -> str | None:
+    request_id = payload.interaction_info.get("request_id")
+    if isinstance(request_id, str) and request_id.strip():
+        return request_id.strip()
+    return None

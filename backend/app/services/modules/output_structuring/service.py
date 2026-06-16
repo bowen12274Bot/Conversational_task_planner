@@ -99,6 +99,9 @@ def _parse_estimated_time_to_minutes(value: str) -> int | None:
     if not normalized:
         return None
 
+    if not _looks_like_total_effort_time(normalized):
+        return None
+
     range_match = re.search(r"(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)", normalized)
     range_average = (
         (float(range_match.group(1)) + float(range_match.group(2))) / 2
@@ -113,13 +116,62 @@ def _parse_estimated_time_to_minutes(value: str) -> int | None:
     if base_value is None:
         return None
 
-    if "分鐘" in normalized or "min" in normalized or normalized.endswith("m"):
+    if _has_minute_unit(normalized):
         return round(base_value)
 
-    if "小時" in normalized or "hour" in normalized or normalized.endswith("h"):
+    if _has_hour_unit(normalized):
         return round(base_value * 60)
 
-    return round(base_value * 60)
+    return None
+
+
+def _has_minute_unit(value: str) -> bool:
+    return (
+        "分鐘" in value
+        or "分" in value
+        or "min" in value
+        or value.endswith("m")
+    )
+
+
+def _has_hour_unit(value: str) -> bool:
+    return (
+        "小時" in value
+        or "hour" in value
+        or "hr" in value
+        or value.endswith("h")
+    )
+
+
+def _looks_like_total_effort_time(value: str) -> bool:
+    if not (_has_minute_unit(value) or _has_hour_unit(value)):
+        return False
+
+    unit_pattern = r"(?:小時|hours?|hrs?|h|分鐘|分|min|m)"
+    total_effort_pattern = (
+        rf"^(?:約\s*)?"
+        rf"\d+(?:\.\d+)?"
+        rf"(?:\s*-\s*\d+(?:\.\d+)?)?"
+        rf"\s*{unit_pattern}$"
+    )
+    if not re.fullmatch(total_effort_pattern, value):
+        return False
+
+    cadence_markers = (
+        "/",
+        "每日",
+        "每天",
+        "一天",
+        "每週",
+        "每周",
+        "一週",
+        "一周",
+        "每月",
+        "每次",
+        "一次",
+        "per ",
+    )
+    return not any(marker in value for marker in cadence_markers)
 
 
 def _format_minutes_label(minutes: int) -> str:
@@ -135,29 +187,17 @@ def _format_minutes_label(minutes: int) -> str:
 def _build_total_estimated_time_text(
     structured_main_tasks: list[StructuredMainTaskOutput],
 ) -> str:
+    if not structured_main_tasks:
+        return "待確認"
+
     total_minutes = 0
-    has_any_time = False
 
     for task in structured_main_tasks:
-        if task.subtasks:
-            subtask_minutes = [
-                parsed
-                for subtask in task.subtasks
-                if (parsed := _parse_estimated_time_to_minutes(subtask.estimated_time))
-                is not None
-            ]
-            if subtask_minutes:
-                total_minutes += sum(subtask_minutes)
-                has_any_time = True
-                continue
-
         parsed_task_time = _parse_estimated_time_to_minutes(task.estimated_time)
-        if parsed_task_time is not None:
-            total_minutes += parsed_task_time
-            has_any_time = True
+        if parsed_task_time is None:
+            return "待確認"
 
-    if not has_any_time:
-        return "待確認"
+        total_minutes += parsed_task_time
 
     return _format_minutes_label(total_minutes)
 

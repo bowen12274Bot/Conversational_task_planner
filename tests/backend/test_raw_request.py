@@ -2,11 +2,15 @@ from fastapi.testclient import TestClient
 from datetime import datetime
 from types import SimpleNamespace
 
+from app.api import routes as routes_module
 from app.controllers import raw_request_controller as raw_request_module
 from app.schemas import (
+    ChatModuleOutput,
+    ChatReferencedPlan,
     ContextEngineeringOutput,
     PlanningCreateOutput,
     PlanningMainTask,
+    PlanningRevisionOutput,
     PlanningSchedule,
     PlanningSubtask,
     QuestioningDecision,
@@ -69,8 +73,13 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     )
     monkeypatch.setattr(
         raw_request_module,
+        "get_structured_task_output",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
         "build_context_from_raw_input",
-        lambda user_input, conversation_id=None: ContextEngineeringOutput(
+        lambda user_input, conversation_id=None, existing_plan_outline=None: ContextEngineeringOutput(
             requirement_context="整理後摘要",
             known_information=[],
             pending_confirmation=[{"label": "time_budget", "question_hint": "每天能投入多久？"}],
@@ -80,7 +89,7 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     monkeypatch.setattr(
         raw_request_module,
         "evaluate_questioning_need",
-        lambda context_output, follow_up_round_count: QuestioningDecision(
+        lambda context_output, follow_up_round_count, has_existing_plan=False, existing_plan_outline=None: QuestioningDecision(
             decision="follow_up",
             reasoning="資訊不足，需要追問。",
             known_information=context_output.known_information,
@@ -128,6 +137,98 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
     assert follow_up_counter_calls == ["conv-001"]
 
 
+def test_raw_request_publishes_progress_events_when_request_id_is_provided(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    published_events: list[dict[str, str | None]] = []
+
+    def fake_publish_progress_event(**kwargs):
+        published_events.append(kwargs)
+
+    monkeypatch.setattr(routes_module, "publish_progress_event", fake_publish_progress_event)
+    monkeypatch.setattr(raw_request_module, "publish_progress_event", fake_publish_progress_event)
+    monkeypatch.setattr(
+        raw_request_module,
+        "store_conversation_record",
+        lambda record: SimpleNamespace(
+            conversation_id=record.conversation_id,
+            turn_id=record.turn_id or "turn-progress",
+            message_created_at=datetime(2026, 6, 2, 10, 30, 0),
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "increment_follow_up_round_count",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_follow_up_round_count",
+        lambda conversation_id: 0,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_structured_task_output",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_context_from_raw_input",
+        lambda user_input, conversation_id=None, existing_plan_outline=None: ContextEngineeringOutput(
+            requirement_context="整理後摘要",
+            known_information=[],
+            pending_confirmation=[
+                {"label": "time_budget", "question_hint": "每天能投入多久？"}
+            ],
+            conversation_history_text=None,
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "evaluate_questioning_need",
+        lambda context_output, follow_up_round_count, has_existing_plan=False, existing_plan_outline=None: QuestioningDecision(
+            decision="follow_up",
+            reasoning="資訊不足，需要追問。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            next_step_guidance=["每天大約可以投入多少時間？"],
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_response_from_questioning",
+        lambda questioning_decision: ResponseOutput(
+            reply_text="請先補充每天可投入的時間。",
+            response_type="follow_up_question",
+        ),
+    )
+
+    response = client.post(
+        "/api/raw-request",
+        json={
+            "conversation_id": "conv-progress",
+            "user_input": "我想把這週的 API 串接工作排出來",
+            "interaction_info": {"request_id": "req-progress"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert [
+        event["event_type"]
+        for event in published_events
+    ] == [
+        "request_received",
+        "context_engineering_started",
+        "questioning_started",
+        "route_decided",
+        "response_started",
+        "completed",
+    ]
+    assert {event["request_id"] for event in published_events} == {"req-progress"}
+    assert {event["conversation_id"] for event in published_events} == {"conv-progress"}
+
+
 def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     client: TestClient,
     monkeypatch,
@@ -162,8 +263,13 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     )
     monkeypatch.setattr(
         raw_request_module,
+        "get_structured_task_output",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
         "build_context_from_raw_input",
-        lambda user_input, conversation_id=None: ContextEngineeringOutput(
+        lambda user_input, conversation_id=None, existing_plan_outline=None: ContextEngineeringOutput(
             requirement_context="整理後摘要",
             known_information=[
                 {"label": "task_type", "value": "Java 作業"},
@@ -176,7 +282,7 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
     monkeypatch.setattr(
         raw_request_module,
         "evaluate_questioning_need",
-        lambda context_output, follow_up_round_count: QuestioningDecision(
+        lambda context_output, follow_up_round_count, has_existing_plan=False, existing_plan_outline=None: QuestioningDecision(
             decision="planning",
             reasoning="資訊足夠，可進入規劃。",
             known_information=context_output.known_information,
@@ -264,5 +370,353 @@ def test_raw_request_resets_follow_up_round_count_when_entering_planning(
             "turn_id": "turn-001",
             "type": "ai",
             "content": "我先整理出一版初步規劃，已經放在右側規劃面板。",
+        },
+    ]
+
+
+def test_raw_request_revises_existing_plan_without_rebuilding_other_main_tasks(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    existing_structured_output = {
+        "plan_summary": "針對三個階段建立多益準備路線。",
+        "summary_metrics": {
+            "total_estimated_time_text": "約 3 小時",
+            "daily_time_budget_text": "一天2小時",
+            "estimated_completion_text": "待確認",
+        },
+        "main_tasks": [
+            {
+                "title": "第一階段情境重點規劃",
+                "description": "鎖定多益常見生活與商務情境。",
+                "estimated_time": "1 小時",
+                "order": 1,
+                "subtasks": [
+                    {
+                        "title": "核心情境分類",
+                        "description": "整理常見情境。",
+                        "priority": "high",
+                        "estimated_time": "30 分鐘",
+                        "order": 1,
+                    },
+                    {
+                        "title": "基礎文法對應",
+                        "description": "將文法重點與情境結合。",
+                        "priority": "medium",
+                        "estimated_time": "30 分鐘",
+                        "order": 2,
+                    },
+                ],
+            },
+            {
+                "title": "學習管道與工具建議",
+                "description": "提供適合每日 2 小時利用的有效學習途徑。",
+                "estimated_time": "1 小時",
+                "order": 2,
+                "subtasks": [
+                    {
+                        "title": "數位學習工具",
+                        "description": "整理 APP 與網站。",
+                        "priority": "high",
+                        "estimated_time": "30 分鐘",
+                        "order": 1,
+                    }
+                ],
+            },
+            {
+                "title": "題型突破與模擬練習",
+                "description": "安排考題訓練。",
+                "estimated_time": "1 小時",
+                "order": 3,
+                "subtasks": [
+                    {
+                        "title": "模擬測驗",
+                        "description": "完成一回模擬題。",
+                        "priority": "medium",
+                        "estimated_time": "1 小時",
+                        "order": 1,
+                    }
+                ],
+            },
+        ],
+    }
+    saved_structured_outputs: list[tuple[str, dict[str, object] | None]] = []
+    initial_planning_calls: list[object] = []
+    revision_inputs: list[object] = []
+
+    monkeypatch.setattr(
+        raw_request_module,
+        "store_conversation_record",
+        lambda record: SimpleNamespace(
+            conversation_id=record.conversation_id,
+            turn_id=record.turn_id or "turn-003",
+            message_created_at=datetime(2026, 6, 2, 12, 0, 0),
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_structured_task_output",
+        lambda conversation_id: existing_structured_output,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_follow_up_round_count",
+        lambda conversation_id: 0,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "reset_follow_up_round_count",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "save_structured_task_output",
+        lambda conversation_id, structured_task_output: saved_structured_outputs.append(
+            (conversation_id, structured_task_output)
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_context_from_raw_input",
+        lambda user_input, conversation_id=None, existing_plan_outline=None: ContextEngineeringOutput(
+            requirement_context="使用者希望細化既有規劃中的第一階段，補充練習情境與學習管道。",
+            known_information=[
+                {"label": "task_type", "value": "多益學習計畫"},
+                {"label": "time_budget", "value": "一天2小時"},
+            ],
+            pending_confirmation=[],
+            conversation_history_text=None,
+            planning_intent={
+                "intent_type": "revise",
+                "target_main_task_order": 1,
+                "confidence": "high",
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "evaluate_questioning_need",
+        lambda context_output, follow_up_round_count, has_existing_plan=False, existing_plan_outline=None: QuestioningDecision(
+            decision="planning",
+            reasoning="修改目標清楚，可進入規劃修改。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            next_step_guidance=["可針對第一階段進行局部修改。"],
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_initial_planning",
+        lambda planning_input: initial_planning_calls.append(planning_input),
+    )
+
+    def fake_build_revised_planning(planning_input):
+        revision_inputs.append(planning_input)
+        return PlanningRevisionOutput(
+            revision_summary="已將第一階段補上更具體的情境練習與學習管道。",
+            design_rationale="使用者要求細化第一階段，因此只更新該階段內容。",
+            assumptions_used=[],
+            target_main_task_order=1,
+            updated_main_task=PlanningMainTask(
+                title="第一階段情境重點規劃",
+                description="針對多益常見生活與商務情境建立具體練習安排。",
+                estimated_time="1 小時",
+                order=1,
+                subtasks=[
+                    PlanningSubtask(
+                        title="生活情境練習",
+                        description="練習交通、餐廳、購物與住宿情境。",
+                        priority="high",
+                        estimated_time="30 分鐘",
+                        order=1,
+                    ),
+                    PlanningSubtask(
+                        title="學習管道整理",
+                        description="搭配 APP、影片與題庫練習情境字彙。",
+                        priority="medium",
+                        estimated_time="30 分鐘",
+                        order=2,
+                    ),
+                ],
+            ),
+        )
+
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_revised_planning",
+        fake_build_revised_planning,
+    )
+
+    response = client.post(
+        "/api/raw-request",
+        json={
+            "conversation_id": "conv-003",
+            "user_input": "請問第一階段時可以針對哪些情境練習，以及有沒有甚麼管道能學習",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert initial_planning_calls == []
+    assert len(revision_inputs) == 1
+    assert revision_inputs[0].target_main_task_order == 1
+    assert body["structured_task_output"]["main_tasks"][0]["description"] == (
+        "針對多益常見生活與商務情境建立具體練習安排。"
+    )
+    assert body["structured_task_output"]["main_tasks"][1] == existing_structured_output["main_tasks"][1]
+    assert body["structured_task_output"]["main_tasks"][2] == existing_structured_output["main_tasks"][2]
+    assert body["reply_text"].startswith("已更新「第一階段情境重點規劃」")
+    assert saved_structured_outputs == [("conv-003", body["structured_task_output"])]
+
+
+def test_raw_request_routes_chat_intent_without_updating_structured_plan(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    existing_structured_output = {
+        "plan_summary": "針對三個階段建立多益準備路線。",
+        "summary_metrics": {
+            "total_estimated_time_text": "約 3 小時",
+            "daily_time_budget_text": "一天2小時",
+            "estimated_completion_text": "待確認",
+        },
+        "main_tasks": [
+            {
+                "title": "第一階段：基礎建立期",
+                "description": "建立基礎單字與文法。",
+                "estimated_time": "1 小時",
+                "order": 1,
+                "subtasks": [],
+            },
+            {
+                "title": "第二階段：題型強化期",
+                "description": "熟悉常見題型。",
+                "estimated_time": "1 小時",
+                "order": 2,
+                "subtasks": [],
+            },
+            {
+                "title": "第三階段：實戰衝刺期",
+                "description": "透過模擬試題進行實戰練習。",
+                "estimated_time": "1 小時",
+                "order": 3,
+                "subtasks": [],
+            },
+        ],
+    }
+    reset_calls: list[str] = []
+    chat_inputs: list[object] = []
+    stored_records: list[dict[str, str | None]] = []
+
+    def fake_store(record):
+        stored_records.append(
+            {
+                "conversation_id": record.conversation_id,
+                "turn_id": record.turn_id,
+                "type": record.type,
+                "content": record.content,
+            }
+        )
+        return SimpleNamespace(
+            conversation_id=record.conversation_id,
+            turn_id=record.turn_id or "turn-chat",
+            message_created_at=datetime(2026, 6, 2, 13, 0, 0),
+        )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("chat route should not call planning or output structuring")
+
+    monkeypatch.setattr(raw_request_module, "store_conversation_record", fake_store)
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_structured_task_output",
+        lambda conversation_id: existing_structured_output,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_follow_up_round_count",
+        lambda conversation_id: 0,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "reset_follow_up_round_count",
+        lambda conversation_id: reset_calls.append(conversation_id),
+    )
+    monkeypatch.setattr(raw_request_module, "build_initial_planning", fail_if_called)
+    monkeypatch.setattr(raw_request_module, "build_revised_planning", fail_if_called)
+    monkeypatch.setattr(raw_request_module, "build_structured_task_output", fail_if_called)
+    monkeypatch.setattr(raw_request_module, "save_structured_task_output", fail_if_called)
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_context_from_raw_input",
+        lambda user_input, conversation_id=None, existing_plan_outline=None: ContextEngineeringOutput(
+            requirement_context="使用者正在針對既有規劃第三階段詢問模擬試題練習方向與學習管道。",
+            known_information=[
+                {"label": "constraint", "value": "提問目標為既有規劃第三階段"},
+            ],
+            pending_confirmation=[],
+            conversation_history_text=None,
+            planning_intent={
+                "intent_type": "chat",
+                "target_main_task_order": 3,
+                "confidence": "high",
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "evaluate_questioning_need",
+        lambda context_output, follow_up_round_count, has_existing_plan=False, existing_plan_outline=None: QuestioningDecision(
+            decision="planning",
+            reasoning="可進入 Chat Module。",
+            known_information=context_output.known_information,
+            pending_confirmation=[],
+            next_step_guidance=["進入 Chat Module 回答。"],
+        ),
+    )
+
+    def fake_build_chat_answer(chat_input):
+        chat_inputs.append(chat_input)
+        return ChatModuleOutput(
+            answer_types=["execution_advice", "resource_suggestion"],
+            answer="第三階段可以用限時模考搭配錯題分類，學習管道可先找官方範例題與線上題庫。",
+            referenced_plan=ChatReferencedPlan(main_task_order=3, subtask_orders=[]),
+            suggested_follow_up_actions=[],
+        )
+
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_chat_answer",
+        fake_build_chat_answer,
+    )
+
+    response = client.post(
+        "/api/raw-request",
+        json={
+            "conversation_id": "conv-chat",
+            "user_input": "第三階段的模擬試題有沒有甚麼練習方向呢，或是有沒有甚麼學習管道可以參考呢",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reply_text"] == "第三階段可以用限時模考搭配錯題分類，學習管道可先找官方範例題與線上題庫。"
+    assert body["structured_task_output"] is None
+    assert reset_calls == ["conv-chat"]
+    assert len(chat_inputs) == 1
+    assert chat_inputs[0].planning_intent.intent_type == "chat"
+    assert chat_inputs[0].planning_intent.target_main_task_order == 3
+    assert stored_records == [
+        {
+            "conversation_id": "conv-chat",
+            "turn_id": None,
+            "type": "user",
+            "content": "第三階段的模擬試題有沒有甚麼練習方向呢，或是有沒有甚麼學習管道可以參考呢",
+        },
+        {
+            "conversation_id": "conv-chat",
+            "turn_id": "turn-chat",
+            "type": "ai",
+            "content": "第三階段可以用限時模考搭配錯題分類，學習管道可先找官方範例題與線上題庫。",
         },
     ]

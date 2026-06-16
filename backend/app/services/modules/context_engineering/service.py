@@ -1,7 +1,8 @@
 import json
+import re
 from typing import Any
 
-from app.schemas import AIToModuleResult, ContextEngineeringOutput
+from app.schemas import AIToModuleResult, ContextEngineeringOutput, PlanningIntent
 from app.services.persistence import get_conversation_transcript
 from app.services.ai_service.service import run_ai_flow
 from app.services.modules.context_engineering.prompt import (
@@ -18,6 +19,7 @@ MAX_CONTEXT_ENGINEERING_RETRY_COUNT = 3
 def build_context_from_raw_input(
     user_input: str,
     conversation_id: str | None = None,
+    existing_plan_outline: list[dict[str, Any]] | None = None,
 ) -> ContextEngineeringOutput:
     """將使用者原始輸入整理為後續流程可用的基礎上下文。"""
 
@@ -29,6 +31,7 @@ def build_context_from_raw_input(
     ai_request = build_context_engineering_ai_request(
         normalized_input,
         conversation_history_text=conversation_history_text,
+        existing_plan_outline=existing_plan_outline,
     )
     retry_count = 0
     last_failure_reason = "unknown_error"
@@ -97,6 +100,13 @@ def _parse_context_engineering_result(
     pending_confirmation = _collect_information_list(
         parsed_output.get("pending_confirmation")
     )
+    known_information, pending_confirmation = _preserve_explicit_user_facts(
+        user_input=user_input,
+        conversation_history_text=conversation_history_text,
+        known_information=known_information,
+        pending_confirmation=pending_confirmation,
+    )
+    planning_intent = _collect_planning_intent(parsed_output.get("planning_intent"))
 
     if not isinstance(requirement_context, str) or not requirement_context.strip():
         requirement_context = user_input
@@ -106,6 +116,7 @@ def _parse_context_engineering_result(
         known_information=known_information,
         pending_confirmation=pending_confirmation,
         conversation_history_text=conversation_history_text,
+        planning_intent=planning_intent,
     ), "accept", {}
 
 
@@ -166,6 +177,144 @@ def _looks_like_context_engineering_output(value: dict[str, Any]) -> bool:
         "pending_confirmation",
     }
     return required_keys.issubset(value.keys())
+
+
+def _collect_planning_intent(value: Any) -> PlanningIntent:
+    if not isinstance(value, dict):
+        return PlanningIntent(
+            intent_type="other",
+            target_main_task_order=None,
+            confidence="low",
+        )
+
+    try:
+        return PlanningIntent.model_validate(value)
+    except Exception:
+        return PlanningIntent(
+            intent_type="other",
+            target_main_task_order=None,
+            confidence="low",
+        )
+
+
+def _preserve_explicit_user_facts(
+    *,
+    user_input: str,
+    conversation_history_text: str | None,
+    known_information: list[dict[str, Any]],
+    pending_confirmation: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    user_text = _build_user_fact_source_text(
+        user_input=user_input,
+        conversation_history_text=conversation_history_text,
+    )
+    explicit_facts = {
+        "deadline_hint": _extract_explicit_deadline_hint(user_text),
+        "time_budget": _extract_explicit_time_budget(user_text),
+    }
+
+    updated_known_information = list(known_information)
+    updated_pending_confirmation = list(pending_confirmation)
+    for label, value in explicit_facts.items():
+        if value is None:
+            continue
+        if not _has_information_label(
+            updated_known_information,
+            label,
+            value_key="value",
+        ):
+            updated_known_information.append(
+                {
+                    "label": label,
+                    "value": value,
+                }
+            )
+        updated_pending_confirmation = [
+            item
+            for item in updated_pending_confirmation
+            if item.get("label") != label
+        ]
+
+    return updated_known_information, updated_pending_confirmation
+
+
+def _build_user_fact_source_text(
+    *,
+    user_input: str,
+    conversation_history_text: str | None,
+) -> str:
+    user_lines: list[str] = []
+    if conversation_history_text is not None:
+        for raw_line in conversation_history_text.splitlines():
+            line = raw_line.strip()
+            lowered = line.lower()
+            if lowered.startswith("user:"):
+                user_lines.append(line[5:].strip())
+
+    user_lines.append(user_input.strip())
+    return "\n".join(line for line in user_lines if line)
+
+
+def _extract_explicit_deadline_hint(user_input: str) -> str | None:
+    normalized_input = user_input.strip().replace(" ", "")
+    if not normalized_input:
+        return None
+
+    days_match = re.search(r"(\d+)天內", normalized_input)
+    if days_match:
+        return f"{days_match.group(1)}天內"
+
+    week_match = re.search(r"([0-9一二兩三四五六七八九十]+)(?:個)?(?:週|周|星期)(後|內)", normalized_input)
+    if week_match:
+        return f"{week_match.group(1)}週{week_match.group(2)}"
+
+    if "後天" in normalized_input:
+        return "後天"
+    if "明天" in normalized_input:
+        return "明天"
+    if "今天" in normalized_input:
+        return "今天"
+    if "下週" in normalized_input or "下周" in normalized_input:
+        return "下週"
+
+    return None
+
+
+def _extract_explicit_time_budget(user_input: str) -> str | None:
+    normalized_input = user_input.strip().replace(" ", "")
+    if not normalized_input:
+        return None
+
+    daily_match = re.search(
+        r"(?:每天|每日|一天|平均一天)(?:可|可以|能|大約|大概|約|平均|投入|可投入)*([0-9一二兩三四五六七八九十]+)(?:個)?小時",
+        normalized_input,
+    )
+    if daily_match:
+        return f"一天{daily_match.group(1)}小時"
+
+    weekly_match = re.search(
+        r"(?:每週|每周|一週|一周)(?:可|可以|能|大約|大概|約|平均|投入|可投入)*([0-9一二兩三四五六七八九十]+)(?:個)?小時",
+        normalized_input,
+    )
+    if weekly_match:
+        return f"每週{weekly_match.group(1)}小時"
+
+    return None
+
+
+def _has_information_label(
+    items: list[dict[str, Any]],
+    label: str,
+    *,
+    value_key: str,
+) -> bool:
+    for item in items:
+        if item.get("label") != label:
+            continue
+        value = item.get(value_key)
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
 
 
 def _collect_information_list(value: Any) -> list[dict[str, Any]]:

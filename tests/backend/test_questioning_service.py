@@ -175,3 +175,139 @@ def test_parse_questioning_text_can_extract_last_json_object_after_analysis() ->
     assert parsed["decision"] == "follow_up"
     assert parsed["known_information"][0]["label"] == "task_type"
     assert parsed["pending_confirmation"][0]["label"] == "deadline_hint"
+
+
+def test_evaluate_questioning_need_guards_learning_plan_missing_time_budget_and_progress(
+    monkeypatch,
+) -> None:
+    def fail_if_ai_is_called(request):
+        raise AssertionError("guarded questioning should not call AI")
+
+    monkeypatch.setattr(questioning_service, "run_ai_flow", fail_if_ai_is_called)
+
+    context_output = ContextEngineeringOutput(
+        requirement_context="使用者想要利用暑假三個月準備多益考試。",
+        known_information=[
+            {"label": "task_type", "value": "多益考試準備"},
+            {"label": "deadline_hint", "value": "暑假三個月"},
+        ],
+        pending_confirmation=[],
+        conversation_history_text=None,
+        planning_intent={
+            "intent_type": "create",
+            "target_main_task_order": None,
+            "confidence": "high",
+        },
+    )
+
+    result = questioning_service.evaluate_questioning_need(
+        context_output=context_output,
+        follow_up_round_count=0,
+        has_existing_plan=False,
+    )
+
+    pending_labels = {item["label"] for item in result.pending_confirmation}
+    assert result.decision == "follow_up"
+    assert "time_budget" in pending_labels
+    assert "current_progress" in pending_labels
+    assert any("投入多少時間" in guidance for guidance in result.next_step_guidance)
+
+
+def test_evaluate_questioning_need_guards_revise_intent_without_existing_plan(
+    monkeypatch,
+) -> None:
+    def fail_if_ai_is_called(request):
+        raise AssertionError("guarded questioning should not call AI")
+
+    monkeypatch.setattr(questioning_service, "run_ai_flow", fail_if_ai_is_called)
+
+    context_output = ContextEngineeringOutput(
+        requirement_context="使用者想修改第一階段安排。",
+        known_information=[
+            {"label": "task_type", "value": "多益考試準備"},
+            {"label": "deadline_hint", "value": "三個月"},
+        ],
+        pending_confirmation=[],
+        conversation_history_text=None,
+        planning_intent={
+            "intent_type": "revise",
+            "target_main_task_order": 1,
+            "confidence": "high",
+        },
+    )
+
+    result = questioning_service.evaluate_questioning_need(
+        context_output=context_output,
+        follow_up_round_count=0,
+        has_existing_plan=False,
+    )
+
+    assert result.decision == "follow_up"
+    assert result.pending_confirmation[0]["label"] == "constraint"
+    assert "沒有可修改" in result.next_step_guidance[0]
+
+
+def test_evaluate_questioning_need_allows_chat_intent_with_existing_plan(
+    monkeypatch,
+) -> None:
+    def fail_if_ai_is_called(request):
+        raise AssertionError("guarded questioning should not call AI")
+
+    monkeypatch.setattr(questioning_service, "run_ai_flow", fail_if_ai_is_called)
+
+    context_output = ContextEngineeringOutput(
+        requirement_context="使用者詢問第三階段的模擬試題練習方向與學習管道。",
+        known_information=[
+            {"label": "constraint", "value": "提問目標為既有規劃第三階段"},
+        ],
+        pending_confirmation=[],
+        conversation_history_text=None,
+        planning_intent={
+            "intent_type": "chat",
+            "target_main_task_order": 3,
+            "confidence": "high",
+        },
+    )
+
+    result = questioning_service.evaluate_questioning_need(
+        context_output=context_output,
+        follow_up_round_count=0,
+        has_existing_plan=True,
+        existing_plan_outline=[
+            {"order": 3, "title": "第三階段：實戰衝刺期"},
+        ],
+    )
+
+    assert result.decision == "planning"
+    assert "Chat Module" in result.next_step_guidance[0]
+
+
+def test_evaluate_questioning_need_guards_chat_intent_without_existing_plan(
+    monkeypatch,
+) -> None:
+    def fail_if_ai_is_called(request):
+        raise AssertionError("guarded questioning should not call AI")
+
+    monkeypatch.setattr(questioning_service, "run_ai_flow", fail_if_ai_is_called)
+
+    context_output = ContextEngineeringOutput(
+        requirement_context="使用者詢問第三階段的模擬試題練習方向與學習管道。",
+        known_information=[],
+        pending_confirmation=[],
+        conversation_history_text=None,
+        planning_intent={
+            "intent_type": "chat",
+            "target_main_task_order": 3,
+            "confidence": "high",
+        },
+    )
+
+    result = questioning_service.evaluate_questioning_need(
+        context_output=context_output,
+        follow_up_round_count=0,
+        has_existing_plan=False,
+    )
+
+    assert result.decision == "follow_up"
+    assert result.pending_confirmation[0]["label"] == "constraint"
+    assert "沒有既有排程" in result.next_step_guidance[0]

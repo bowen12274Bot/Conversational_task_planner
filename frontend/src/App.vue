@@ -10,6 +10,7 @@ import {
   CpuChipIcon,
   LanguageIcon,
   SunIcon,
+  TrashIcon,
   UserCircleIcon,
 } from '@heroicons/vue/24/outline'
 import { useConversationSession } from './composables/useConversationSession'
@@ -19,6 +20,7 @@ const {
   isInitializing,
   isLoading,
   messages,
+  resetConversationSession,
   sendMessage: sendConversationMessage,
   structuredTaskOutput,
   userInput,
@@ -26,6 +28,7 @@ const {
 
 const expandedTaskOrders = ref<number[]>([])
 const loadingElapsedSeconds = ref(0)
+const showResetConversationDialog = ref(false)
 let loadingTimer: ReturnType<typeof setInterval> | null = null
 
 const sendMessage = async () => {
@@ -33,6 +36,19 @@ const sendMessage = async () => {
 }
 
 const noop = () => {}
+
+const openResetConversationDialog = () => {
+  showResetConversationDialog.value = true
+}
+
+const closeResetConversationDialog = () => {
+  showResetConversationDialog.value = false
+}
+
+const confirmResetConversation = () => {
+  showResetConversationDialog.value = false
+  resetConversationSession()
+}
 
 watch(
   structuredTaskOutput,
@@ -230,6 +246,15 @@ const getMessageRoleLabel = (message: Message): string => {
           <button class="header-action-button icon-only-button" type="button" @click="noop" aria-label="切換主題">
             <SunIcon class="ui-icon" />
           </button>
+          <button
+            class="header-action-button icon-only-button danger-button"
+            type="button"
+            @click="openResetConversationDialog"
+            aria-label="刪除本輪對話"
+            :disabled="isLoading || isInitializing"
+          >
+            <TrashIcon class="ui-icon" />
+          </button>
         </div>
       </div>
 
@@ -392,6 +417,32 @@ const getMessageRoleLabel = (message: Message): string => {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div
+    v-if="showResetConversationDialog"
+    class="dialog-overlay"
+    @click.self="closeResetConversationDialog"
+  >
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="reset-conversation-title">
+      <div class="confirm-dialog-header">
+        <div class="confirm-dialog-icon" aria-hidden="true">
+          <TrashIcon class="ui-icon ui-icon-brand" />
+        </div>
+        <div>
+          <h3 id="reset-conversation-title">刪除本輪對話？</h3>
+          <p>這會清除前端保存的 `conversation_id` 並重新整理頁面，方便快速切換 demo 情境。</p>
+        </div>
+      </div>
+      <div class="confirm-dialog-actions">
+        <button class="dialog-secondary-button" type="button" @click="closeResetConversationDialog">
+          取消
+        </button>
+        <button class="dialog-primary-button danger-fill-button" type="button" @click="confirmResetConversation">
+          刪除並重新整理
+        </button>
       </div>
     </div>
   </div>

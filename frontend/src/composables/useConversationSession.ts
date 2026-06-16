@@ -118,6 +118,14 @@ export function useConversationSession() {
     structuredTaskOutput.value = value
   }
 
+  const resetConversationSession = () => {
+    clearConversationCache()
+    conversationId.value = null
+    structuredTaskOutput.value = null
+    messages.value = getDefaultMessages()
+    window.location.reload()
+  }
+
   const sendMessage = async (): Promise<{ ok: true } | { ok: false }> => {
     if (!userInput.value.trim() || isLoading.value) {
       return { ok: false }
@@ -193,6 +201,7 @@ export function useConversationSession() {
     isInitializing,
     isLoading,
     messages,
+    resetConversationSession,
     sendMessage,
     setStructuredTaskOutput,
     structuredTaskOutput,

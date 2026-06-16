@@ -20,6 +20,7 @@ const {
   isInitializing,
   isLoading,
   messages,
+  progressStatusText,
   resetConversationSession,
   sendMessage: sendConversationMessage,
   structuredTaskOutput,
@@ -107,6 +108,13 @@ const parseEstimatedTimeToMinutes = (value: string): number | null => {
   const normalized = value.trim().toLowerCase()
   if (!normalized) return null
 
+  const unitPattern = '(?:小時|hours?|hrs?|h|分鐘|分|min|m)'
+  const totalEffortPattern = new RegExp(
+    `^(?:約\\s*)?\\d+(?:\\.\\d+)?(?:\\s*-\\s*\\d+(?:\\.\\d+)?)?\\s*${unitPattern}$`,
+  )
+
+  if (!totalEffortPattern.test(normalized)) return null
+
   const rangeMatch = normalized.match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)/)
   const rangeAverage = rangeMatch
     ? (Number(rangeMatch[1]) + Number(rangeMatch[2])) / 2
@@ -122,8 +130,7 @@ const parseEstimatedTimeToMinutes = (value: string): number | null => {
     return Number.isFinite(base) ? Math.round(base * 60) : null
   }
 
-  const plainNumber = Number(normalized.match(/\d+(?:\.\d+)?/)?.[0] ?? NaN)
-  return Number.isFinite(plainNumber) ? Math.round(plainNumber * 60) : null
+  return null
 }
 
 const formatMinutesLabel = (minutes: number): string => {
@@ -151,20 +158,13 @@ const normalizeEstimatedTimeLabel = (value: string): string => {
 const totalEstimatedMinutes = computed(() => {
   if (!structuredTaskOutput.value) return null
 
-  const allSubtasks = structuredTaskOutput.value.main_tasks.flatMap(task => task.subtasks)
-  const subtaskMinutes = allSubtasks
-    .map(subtask => parseEstimatedTimeToMinutes(subtask.estimated_time))
-    .filter((value): value is number => value !== null)
+  const mainTasks = structuredTaskOutput.value.main_tasks
+  if (mainTasks.length === 0) return null
 
-  if (subtaskMinutes.length > 0) {
-    return subtaskMinutes.reduce((sum, value) => sum + value, 0)
-  }
+  const parsedMainTaskMinutes = mainTasks.map(task => parseEstimatedTimeToMinutes(task.estimated_time))
+  if (parsedMainTaskMinutes.some(value => value === null)) return null
 
-  const mainTaskMinutes = structuredTaskOutput.value.main_tasks
-    .map(task => parseEstimatedTimeToMinutes(task.estimated_time))
-    .filter((value): value is number => value !== null)
-
-  if (mainTaskMinutes.length === 0) return null
+  const mainTaskMinutes = parsedMainTaskMinutes as number[]
   return mainTaskMinutes.reduce((sum, value) => sum + value, 0)
 })
 
@@ -290,7 +290,7 @@ const getMessageRoleLabel = (message: Message): string => {
                 <span class="message-time">處理中</span>
               </div>
               <div class="message-bubble">
-                AI 正在思考中，已等待 {{ formatLoadingElapsed(loadingElapsedSeconds) }}...
+                {{ progressStatusText }}，已等待 {{ formatLoadingElapsed(loadingElapsedSeconds) }}...
               </div>
             </div>
           </div>

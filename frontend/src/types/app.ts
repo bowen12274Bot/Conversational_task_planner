@@ -37,3 +37,25 @@ export type ConversationCache = {
   messages: Message[]
   lastUpdated: string
 }
+
+export type ProgressEventType =
+  | 'request_received'
+  | 'context_engineering_started'
+  | 'questioning_started'
+  | 'route_decided'
+  | 'planning_started'
+  | 'revision_started'
+  | 'chat_started'
+  | 'response_started'
+  | 'completed'
+  | 'failed'
+
+export type ProgressEvent = {
+  conversation_id: string
+  request_id: string
+  event_type: ProgressEventType
+  created_at: string
+  turn_id?: string | null
+  stage?: string | null
+  route?: string | null
+}

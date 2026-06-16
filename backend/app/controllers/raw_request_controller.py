@@ -35,6 +35,7 @@ from app.services.persistence import (
     save_structured_task_output,
     store_conversation_record,
 )
+from app.services.progress_events import publish_progress_event
 from app.services.modules.response import (
     build_response_from_chat,
     build_response_from_planning,
@@ -53,6 +54,7 @@ class RawRequestFlowContext:
 
     request: FrontendToControllerRequest
     conversation_id: str
+    request_id: str | None = None
     turn_id: str | None = None
     context_output: ContextEngineeringOutput | None = None
     questioning_decision: QuestioningDecision | None = None
@@ -87,6 +89,7 @@ class RawRequestController:
         context = RawRequestFlowContext(
             request=payload,
             conversation_id=conversation_id,
+            request_id=self._extract_request_id(payload),
         )
         final_response = self._run_flow(context)
         self._ensure_valid_end_stage(context.current_stage)
@@ -135,6 +138,7 @@ class RawRequestController:
         self._transition(context, next_stage="F003")
 
     def _run_stage_f003(self, context: RawRequestFlowContext) -> None:
+        self._publish_progress(context, "context_engineering_started", stage="F003")
         context.existing_structured_task_output = get_structured_task_output(
             context.conversation_id
         )
@@ -152,6 +156,7 @@ class RawRequestController:
         if context.context_output is None:
             raise ValueError("context_output 尚未建立。")
 
+        self._publish_progress(context, "questioning_started", stage="F004")
         follow_up_round_count = get_follow_up_round_count(context.conversation_id)
         existing_plan_outline = self._build_existing_plan_outline(
             context.existing_structured_task_output
@@ -168,6 +173,12 @@ class RawRequestController:
         if context.questioning_decision is None:
             raise ValueError("questioning_decision 尚未建立。")
 
+        self._publish_progress(
+            context,
+            "route_decided",
+            stage="F005",
+            route=self._resolve_progress_route(context),
+        )
         if context.questioning_decision.decision == "planning":
             if self._should_run_chat(context):
                 self._transition(context, next_stage="F019")
@@ -181,6 +192,7 @@ class RawRequestController:
         if context.questioning_decision is None:
             raise ValueError("questioning_decision 尚未建立。")
 
+        self._publish_progress(context, "response_started", stage="F006", route="follow_up")
         increment_follow_up_round_count(context.conversation_id)
         context.response_output = build_response_from_questioning(
             questioning_decision=context.questioning_decision,
@@ -218,11 +230,13 @@ class RawRequestController:
             raise ValueError("context_output 尚未建立。")
 
         if self._should_run_revision(context):
+            self._publish_progress(context, "revision_started", stage="F008", route="revise")
             context.planning_mode = "revise"
             context.planning_revision_input = self._build_planning_revision_input(
                 context
             )
         else:
+            self._publish_progress(context, "planning_started", stage="F008", route="create")
             self._ensure_create_planning_is_safe(context)
             context.planning_mode = "create"
             context.planning_input = PlanningCreateInput(
@@ -264,6 +278,12 @@ class RawRequestController:
         if context.context_output is None:
             raise ValueError("context_output 尚未建立。")
 
+        self._publish_progress(
+            context,
+            "response_started",
+            stage="F011",
+            route=context.planning_mode,
+        )
         structured_task_output = build_structured_task_output(
             context.planning_output,
             known_information=context.context_output.known_information,
@@ -321,6 +341,7 @@ class RawRequestController:
 
     def _run_stage_f019(self, context: RawRequestFlowContext) -> None:
         reset_follow_up_round_count(context.conversation_id)
+        self._publish_progress(context, "chat_started", stage="F019", route="chat")
         context.chat_input = self._build_chat_input(context)
         context.chat_output = build_chat_answer(context.chat_input)
         self._transition(context, next_stage="F020")
@@ -329,6 +350,7 @@ class RawRequestController:
         if context.chat_output is None:
             raise ValueError("chat_output 尚未建立。")
 
+        self._publish_progress(context, "response_started", stage="F020", route="chat")
         context.response_output = build_response_from_chat(
             ChatResponseInput(chat_output=context.chat_output)
         )
@@ -352,6 +374,43 @@ class RawRequestController:
     ) -> None:
         context.current_stage = next_stage
         context.traversed_history.append(next_stage)
+
+    def _publish_progress(
+        self,
+        context: RawRequestFlowContext,
+        event_type: str,
+        *,
+        stage: str | None = None,
+        route: str | None = None,
+    ) -> None:
+        publish_progress_event(
+            conversation_id=context.conversation_id,
+            request_id=context.request_id,
+            turn_id=context.turn_id,
+            event_type=event_type,
+            stage=stage,
+            route=route,
+        )
+
+    def _extract_request_id(
+        self,
+        payload: FrontendToControllerRequest,
+    ) -> str | None:
+        request_id = payload.interaction_info.get("request_id")
+        if isinstance(request_id, str) and request_id.strip():
+            return request_id.strip()
+        return None
+
+    def _resolve_progress_route(self, context: RawRequestFlowContext) -> str:
+        if context.questioning_decision is None:
+            return "unknown"
+        if context.questioning_decision.decision == "follow_up":
+            return "follow_up"
+        if self._should_run_chat(context):
+            return "chat"
+        if self._should_run_revision(context):
+            return "revise"
+        return "create"
 
     def _ensure_valid_end_stage(self, stage: str) -> None:
         """確保流程是停在 raw_request 這條路線允許的合法終點。"""

@@ -142,6 +142,8 @@ def _build_revision_rules_text() -> str:
         "Preserve target_main_task_order and do not return or rewrite non-target main tasks. "
         "Use known_information as confirmed facts and treat pending_confirmation as unresolved context. "
         "If the user asks for more detail, improve the target task description and subtasks with useful, concrete steps. "
+        "For updated_main_task.estimated_time, output the total effort for that main task in hours, such as '8 小時' or '6-8 小時'. "
+        "Do not use duration, cadence, or period expressions for a main task estimate, such as '第 1-4 週', '1 個月', '每天 1 小時', or '1 小時/日'. "
         "Do not invent major deadlines, progress, or constraints that are not supported by the input."
     )
 
@@ -237,6 +239,8 @@ def _build_revision_format_requirements() -> dict[str, Any]:
             "target_main_task_order must match the input target_main_task_order.",
             "updated_main_task must contain title, description, estimated_time, order, and subtasks.",
             "updated_main_task.order must match target_main_task_order.",
+            "updated_main_task.estimated_time must be a total effort estimate in hours, for example '8 小時' or '6-8 小時'.",
+            "updated_main_task.estimated_time must not contain cadence or period wording such as '/日', '/週', '每天', '每週', '第 1-4 週', or '1 個月'.",
             "Each subtask must contain title, description, priority, estimated_time, and order.",
             "priority must be one of high, medium, or low.",
             "Return exactly one JSON object and nothing else.",
@@ -259,6 +263,8 @@ def _build_rules_text() -> str:
         "If deadline_hint and time_budget are both available, estimate the user's available work capacity and keep the total schedule within that capacity. "
         "Do not produce a plan whose total estimated effort clearly exceeds the user's available time. "
         "If the available time appears insufficient, reduce scope conservatively and explain that limitation in design_rationale or assumptions_used. "
+        "For every main task estimated_time, output the total effort for that main task in hours, such as '8 小時' or '6-8 小時'. "
+        "Do not use duration, cadence, or period expressions for main task estimates, such as '第 1-4 週', '1 個月', '每天 1 小時', or '1 小時/日'. "
         "Do not invent deadlines, progress, constraints, or task details that are not reasonably supported by the input."
     )
 
@@ -310,14 +316,14 @@ def _build_examples() -> list[dict[str, Any]]:
                         {
                             "title": "確認作業需求與交付內容",
                             "description": "整理題目要求、輸入輸出格式與評分重點。",
-                            "estimated_time": "1-2h",
+                            "estimated_time": "1.5 小時",
                             "order": 1,
                             "subtasks": [
                                 {
                                     "title": "閱讀題目說明",
                                     "description": "確認題目要求與限制。",
                                     "priority": "high",
-                                    "estimated_time": "30m",
+                                    "estimated_time": "30 分鐘",
                                     "order": 1,
                                 }
                             ],
@@ -433,6 +439,8 @@ def _build_format_requirements() -> dict[str, Any]:
             "schedule must be an object containing main_tasks.",
             "main_tasks must be a list of objects.",
             "Each main_tasks item must contain title, description, estimated_time, order, and subtasks.",
+            "Each main task estimated_time must be a total effort estimate in hours, for example '8 小時' or '6-8 小時'.",
+            "Main task estimated_time must not contain cadence or period wording such as '/日', '/週', '每天', '每週', '第 1-4 週', or '1 個月'.",
             "Each subtasks item must contain title, description, priority, estimated_time, and order.",
             "priority must be one of high, medium, or low.",
             "If deadline_hint and time_budget are both available in known_information, the total estimated effort should remain feasible for that available time.",

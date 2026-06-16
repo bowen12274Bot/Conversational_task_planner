@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from datetime import datetime
 from types import SimpleNamespace
 
+from app.api import routes as routes_module
 from app.controllers import raw_request_controller as raw_request_module
 from app.schemas import (
     ChatModuleOutput,
@@ -134,6 +135,98 @@ def test_raw_request_runs_follow_up_branch_and_returns_reply_text(
         },
     ]
     assert follow_up_counter_calls == ["conv-001"]
+
+
+def test_raw_request_publishes_progress_events_when_request_id_is_provided(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    published_events: list[dict[str, str | None]] = []
+
+    def fake_publish_progress_event(**kwargs):
+        published_events.append(kwargs)
+
+    monkeypatch.setattr(routes_module, "publish_progress_event", fake_publish_progress_event)
+    monkeypatch.setattr(raw_request_module, "publish_progress_event", fake_publish_progress_event)
+    monkeypatch.setattr(
+        raw_request_module,
+        "store_conversation_record",
+        lambda record: SimpleNamespace(
+            conversation_id=record.conversation_id,
+            turn_id=record.turn_id or "turn-progress",
+            message_created_at=datetime(2026, 6, 2, 10, 30, 0),
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "increment_follow_up_round_count",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_follow_up_round_count",
+        lambda conversation_id: 0,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "get_structured_task_output",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_context_from_raw_input",
+        lambda user_input, conversation_id=None, existing_plan_outline=None: ContextEngineeringOutput(
+            requirement_context="整理後摘要",
+            known_information=[],
+            pending_confirmation=[
+                {"label": "time_budget", "question_hint": "每天能投入多久？"}
+            ],
+            conversation_history_text=None,
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "evaluate_questioning_need",
+        lambda context_output, follow_up_round_count, has_existing_plan=False, existing_plan_outline=None: QuestioningDecision(
+            decision="follow_up",
+            reasoning="資訊不足，需要追問。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            next_step_guidance=["每天大約可以投入多少時間？"],
+        ),
+    )
+    monkeypatch.setattr(
+        raw_request_module,
+        "build_response_from_questioning",
+        lambda questioning_decision: ResponseOutput(
+            reply_text="請先補充每天可投入的時間。",
+            response_type="follow_up_question",
+        ),
+    )
+
+    response = client.post(
+        "/api/raw-request",
+        json={
+            "conversation_id": "conv-progress",
+            "user_input": "我想把這週的 API 串接工作排出來",
+            "interaction_info": {"request_id": "req-progress"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert [
+        event["event_type"]
+        for event in published_events
+    ] == [
+        "request_received",
+        "context_engineering_started",
+        "questioning_started",
+        "route_decided",
+        "response_started",
+        "completed",
+    ]
+    assert {event["request_id"] for event in published_events} == {"req-progress"}
+    assert {event["conversation_id"] for event in published_events} == {"conv-progress"}
 
 
 def test_raw_request_resets_follow_up_round_count_when_entering_planning(

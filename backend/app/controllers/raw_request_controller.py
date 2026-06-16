@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.schemas import (
+    ChatModuleInput,
+    ChatModuleOutput,
+    ChatResponseInput,
     ContextEngineeringOutput,
     ControllerToFrontendResponse,
     ConversationRecordStoreRequest,
@@ -17,6 +20,7 @@ from app.schemas import (
     QuestioningDecision,
     ResponseOutput,
 )
+from app.services.modules.chat import build_chat_answer
 from app.services.modules.context_engineering import build_context_from_raw_input
 from app.services.modules.planning import build_initial_planning, build_revised_planning
 from app.services.modules.questioning import evaluate_questioning_need
@@ -32,6 +36,7 @@ from app.services.persistence import (
     store_conversation_record,
 )
 from app.services.modules.response import (
+    build_response_from_chat,
     build_response_from_planning,
     build_response_from_planning_revision,
     build_response_from_questioning,
@@ -56,6 +61,8 @@ class RawRequestFlowContext:
     planning_revision_input: PlanningRevisionInput | None = None
     planning_output: PlanningCreateOutput | None = None
     planning_revision_output: PlanningRevisionOutput | None = None
+    chat_input: ChatModuleInput | None = None
+    chat_output: ChatModuleOutput | None = None
     existing_structured_task_output: dict[str, Any] | None = None
     structured_task_output: dict[str, Any] | None = None
     planning_mode: str = "create"
@@ -99,6 +106,8 @@ class RawRequestController:
             "F010": self._run_stage_f010,
             "F011": self._run_stage_f011,
             "F012": self._run_stage_f012,
+            "F019": self._run_stage_f019,
+            "F020": self._run_stage_f020,
         }
 
         while True:
@@ -160,6 +169,9 @@ class RawRequestController:
             raise ValueError("questioning_decision 尚未建立。")
 
         if context.questioning_decision.decision == "planning":
+            if self._should_run_chat(context):
+                self._transition(context, next_stage="F019")
+                return
             self._transition(context, next_stage="F008")
             return
 
@@ -307,6 +319,32 @@ class RawRequestController:
             structured_task_output=context.structured_task_output,
         )
 
+    def _run_stage_f019(self, context: RawRequestFlowContext) -> None:
+        reset_follow_up_round_count(context.conversation_id)
+        context.chat_input = self._build_chat_input(context)
+        context.chat_output = build_chat_answer(context.chat_input)
+        self._transition(context, next_stage="F020")
+
+    def _run_stage_f020(self, context: RawRequestFlowContext) -> None:
+        if context.chat_output is None:
+            raise ValueError("chat_output 尚未建立。")
+
+        context.response_output = build_response_from_chat(
+            ChatResponseInput(chat_output=context.chat_output)
+        )
+        store_result = store_conversation_record(
+            ConversationRecordStoreRequest(
+                conversation_id=context.conversation_id,
+                turn_id=context.turn_id,
+                type="ai",
+                content=context.response_output.reply_text,
+            )
+        )
+        context.reply_created_at = self._normalize_utc_timestamp(
+            store_result.message_created_at
+        )
+        self._transition(context, next_stage="F007")
+
     def _transition(
         self,
         context: RawRequestFlowContext,
@@ -346,6 +384,31 @@ class RawRequestController:
             planning_intent.target_main_task_order,
         )
         return True
+
+    def _should_run_chat(self, context: RawRequestFlowContext) -> bool:
+        if context.context_output is None or context.context_output.planning_intent is None:
+            return False
+
+        return context.context_output.planning_intent.intent_type == "chat"
+
+    def _build_chat_input(self, context: RawRequestFlowContext) -> ChatModuleInput:
+        if context.context_output is None:
+            raise ValueError("context_output 尚未建立。")
+        if context.context_output.planning_intent is None:
+            raise ValueError("planning_intent 尚未建立。")
+
+        return ChatModuleInput(
+            raw_requirement=context.request.user_input,
+            requirement_context=context.context_output.requirement_context,
+            planning_intent=context.context_output.planning_intent,
+            known_information=context.context_output.known_information,
+            pending_confirmation=context.context_output.pending_confirmation,
+            conversation_history_text=context.context_output.conversation_history_text,
+            existing_plan_outline=self._build_existing_plan_outline(
+                context.existing_structured_task_output
+            ),
+            structured_task_output=context.existing_structured_task_output,
+        )
 
     def _ensure_create_planning_is_safe(self, context: RawRequestFlowContext) -> None:
         if context.existing_structured_task_output is None:

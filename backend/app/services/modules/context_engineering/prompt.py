@@ -110,7 +110,7 @@ def _build_format_requirements() -> dict[str, Any]:
             "known_information must be a list of objects containing only information clearly supported by the current raw requirement or prior user messages that are still relevant.",
             "pending_confirmation must be a list of objects for important missing, unclear, or conflicting information that should be clarified later.",
             "planning_intent must be an object containing intent_type, target_main_task_order, and confidence.",
-            "planning_intent.intent_type must be one of create, revise, or other.",
+            "planning_intent.intent_type must be one of create, revise, chat, or other.",
             "planning_intent.target_main_task_order must be a positive integer when the current request clearly targets one existing main task; otherwise use null.",
             "planning_intent.confidence must be one of high, medium, or low.",
             "Use label and value for each known_information item.",
@@ -135,7 +135,7 @@ def _build_rules_text() -> str:
         "You are a requirement analysis assistant. "
         "Use the current raw requirement as the primary input for this turn. "
         "Use prior conversation history to help interpret the current turn and preserve relevant known_information and pending_confirmation continuity. "
-        "If an existing plan outline is provided, use it only to identify whether the current turn appears to create a new plan, revise an existing plan, or do something else. "
+        "If an existing plan outline is provided, use it only to identify whether the current turn appears to create a new plan, revise an existing plan, ask a planning-related chat question, or do something else. "
         "When deciding confirmed information, prioritize content clearly supported by user messages, "
         "and treat prior AI replies as contextual references rather than independent confirmed facts. "
         "Do not decide whether to ask follow-up questions; only organize the observable information and planning intent. "
@@ -151,8 +151,8 @@ def _build_task_description() -> str:
         "then build a refreshed requirement_context, known_information, pending_confirmation, and planning_intent for this turn. "
         "If prior user-provided facts are still relevant and not contradicted, explicitly keep them in known_information for the current turn instead of dropping them. "
         "When a previous user message has already established task type, deadline, time budget, progress, difficulty, or constraint information and the current turn does not replace or conflict with it, preserve that information in known_information while adding the new details from the current turn. "
-        "Set planning_intent.intent_type to create when the user appears to request a new plan, revise when the user appears to refine or change an existing plan, and other when the current turn is not a planning creation or revision request. "
-        "When intent_type is revise, set target_main_task_order only if the current turn clearly points to one item from existing_plan_outline. "
+        "Set planning_intent.intent_type to create when the user appears to request a new plan, revise when the user clearly asks to add, remove, rewrite, split, reschedule, or update an existing plan, chat when the user asks a question about the current task or plan without asking to update the plan, and other when none of those apply. "
+        "When intent_type is revise or chat, set target_main_task_order only if the current turn clearly points to one item from existing_plan_outline. "
         "If the current raw requirement clearly corrects or updates prior information, use the current raw requirement as the new source of truth. "
         "If the current raw requirement conflicts with prior history but the correction is unclear, do not force a resolution; "
         "move the conflicting item into pending_confirmation instead."
@@ -343,26 +343,53 @@ def _build_examples() -> list[dict[str, Any]]:
         {
             "input": (
                 "Current raw requirement:\n"
-                "請問第一階段時可以針對哪些情境練習，以及有沒有甚麼管道能學習\n\n"
+                "第三階段的模擬試題有沒有什麼練習方向呢，或是有沒有什麼學習管道可以參考呢\n\n"
                 "Existing plan outline:\n"
-                "1. 第一階段情境重點規劃 - 鎖定多益高頻生活與商務情境。\n"
-                "2. 學習管道與工具建議 - 提供每日可用的學習管道。\n"
-                "3. 題型突破與模擬練習 - 安排考題訓練。"
+                "1. 第一階段：基礎建立期\n"
+                "2. 第二階段：題型強化期\n"
+                "3. 第三階段：實戰衝刺期"
             ),
             "output": {
                 "requirement_context": (
-                    "使用者希望細化既有規劃中的第一階段，補充可練習的情境與學習管道。"
+                    "使用者正在針對既有規劃中的第三階段詢問模擬試題練習方向與學習管道，尚未明確要求修改排程。"
                 ),
                 "known_information": [
                     {
                         "label": "constraint",
-                        "value": "修改目標為既有規劃的第一階段",
+                        "value": "提問目標為既有規劃的第三階段",
+                    }
+                ],
+                "pending_confirmation": [],
+                "planning_intent": {
+                    "intent_type": "chat",
+                    "target_main_task_order": 3,
+                    "confidence": "high",
+                },
+            },
+        },
+        {
+            "input": (
+                "Current raw requirement:\n"
+                "幫我把第三階段加上模擬試題練習方向和學習管道\n\n"
+                "Existing plan outline:\n"
+                "1. 第一階段：基礎建立期\n"
+                "2. 第二階段：題型強化期\n"
+                "3. 第三階段：實戰衝刺期"
+            ),
+            "output": {
+                "requirement_context": (
+                    "使用者明確要求將模擬試題練習方向與學習管道加入既有規劃第三階段。"
+                ),
+                "known_information": [
+                    {
+                        "label": "constraint",
+                        "value": "修改目標為既有規劃的第三階段",
                     }
                 ],
                 "pending_confirmation": [],
                 "planning_intent": {
                     "intent_type": "revise",
-                    "target_main_task_order": 1,
+                    "target_main_task_order": 3,
                     "confidence": "high",
                 },
             },

@@ -13,7 +13,7 @@ class RequirementInput(BaseModel):
 class PlanningIntent(BaseModel):
     """由 Context Engineering 整理出的規劃意圖線索。"""
 
-    intent_type: Literal["create", "revise", "other"]
+    intent_type: Literal["create", "revise", "chat", "other"]
     target_main_task_order: int | None = Field(default=None, ge=1)
     confidence: Literal["high", "medium", "low"]
 
@@ -115,6 +115,58 @@ class PlanningRevisionOutput(BaseModel):
     updated_main_task: PlanningMainTask
 
 
+class ChatReferencedPlan(BaseModel):
+    """Chat Module 回答中引用的既有規劃位置。"""
+
+    main_task_order: int | None = Field(default=None, ge=1)
+    subtask_orders: list[str] = Field(default_factory=list)
+
+
+class ChatSuggestedFollowUpAction(BaseModel):
+    """Chat Module 回答後可提供的後續操作提示。"""
+
+    action_type: Literal["revise_plan", "ask_more"]
+    label: str = Field(..., min_length=1)
+
+
+class ChatModuleInput(BaseModel):
+    """提供 `Chat Module` 回答規劃相關問題時使用的輸入資料。"""
+
+    raw_requirement: str = Field(..., min_length=1)
+    requirement_context: str = Field(..., min_length=1)
+    planning_intent: PlanningIntent
+    known_information: list[dict[str, Any]] = Field(default_factory=list)
+    pending_confirmation: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_history_text: str | None = None
+    existing_plan_outline: list[dict[str, Any]] = Field(default_factory=list)
+    structured_task_output: dict[str, Any] | None = None
+
+
+class ChatModuleOutput(BaseModel):
+    """由 `Chat Module` 產出的規劃相關問答結果。"""
+
+    answer_types: list[
+        Literal[
+            "plan_explanation",
+            "execution_advice",
+            "resource_suggestion",
+            "risk_analysis",
+            "general_answer",
+        ]
+    ] = Field(..., min_length=1, max_length=3)
+    answer: str = Field(..., min_length=1)
+    referenced_plan: ChatReferencedPlan | None = None
+    suggested_follow_up_actions: list[ChatSuggestedFollowUpAction] = Field(
+        default_factory=list
+    )
+
+
+class ChatResponseInput(BaseModel):
+    """提供 `Response Module` 包裝 Chat Module 回答時使用的輸入資料。"""
+
+    chat_output: ChatModuleOutput
+
+
 class StructuredSubtaskOutput(BaseModel):
     """供前端規劃面板顯示的子任務資料。"""
 
@@ -178,4 +230,5 @@ class ResponseOutput(BaseModel):
         "follow_up_question",
         "planning_summary",
         "planning_revision_summary",
+        "chat_answer",
     ]

@@ -1,5 +1,7 @@
 from app.schemas import (
     AIToModuleResult,
+    ChatModuleOutput,
+    ChatResponseInput,
     PlanningResponseInput,
     StructuredSummaryMetricsOutput,
     StructuredTaskOutput,
@@ -72,3 +74,19 @@ def test_build_fallback_planning_response_returns_plain_text_summary() -> None:
     assert result.response_type == "planning_summary"
     assert "右側規劃面板" in result.reply_text
     assert "先完成需求確認，再安排核心實作與測試" in result.reply_text
+
+
+def test_build_response_from_chat_returns_chat_answer_without_ai_call() -> None:
+    result = response_service.build_response_from_chat(
+        ChatResponseInput(
+            chat_output=ChatModuleOutput(
+                answer_types=["execution_advice", "resource_suggestion"],
+                answer="第三階段可以用限時模考搭配錯題分類。",
+                referenced_plan=None,
+                suggested_follow_up_actions=[],
+            )
+        )
+    )
+
+    assert result.response_type == "chat_answer"
+    assert result.reply_text == "第三階段可以用限時模考搭配錯題分類。"

@@ -70,7 +70,7 @@
 
 以下表格作為目前主流程的流程關係圖定義基準。
 
-在 MVP 階段，本文先定義追問路線與初步規劃路線兩條主要分支；後續若有新分支或新節點，應延續同一份流程資料結構擴充。
+在 MVP 階段，本文先定義追問路線、規劃路線與規劃相關問答路線；後續若有新分支或新節點，應延續同一份流程資料結構擴充。
 
 目前除主流程外，也補充以下與對話紀錄相關的流程：
 
@@ -86,9 +86,9 @@
 | `F002` | `N2` | `controller_to_context_engineering_transfer_and_persistence_store` | 後端流程控制層 -> `Context Engineering Module` 與 `Persistence Layer` | `N1` | `N3` 與 結束 | 控制層承接使用者輸入後，會同步將主流程資料轉交給 `Context Engineering Module`，並將使用者端對話紀錄資料送入 `Persistence Layer` 保存。 |
 | `F003` | `N3` | `context_engineering_to_questioning_prepare` | `Context Engineering Module` -> `Questioning Module` | `N2` | `N4` | 已取得可用資訊基礎，因此可交由 `Questioning Module` 判斷資訊是否足夠。 |
 | `F004` | `N4` | `questioning_to_controller_evaluate` | `Questioning Module` -> 後端流程控制層 | `N3` | `N5` | `Questioning Module` 已完成判斷，因此控制層可依該結果決定後續分支。 |
-| `F005` | `N5` | `controller_to_response_or_planning_branch` | 後端流程控制層 -> `Response Module` 或規劃相關處理 | `N4` | `N6` 或 `N8` | 若 `Questioning Module` 判斷需要追問，則進入 `Response Module`；若判斷資訊已足以開始規劃，則直接進入規劃相關處理。 |
-| `F006` | `N6` | `response_to_controller_return_and_persistence_store` | `Response Module` -> 後端流程控制層與 `Persistence Layer` | `N5` | `N7` 與 結束 | `Response Module` 已將追問文字或回覆內容準備完成，因此會同步將結果交回控制層承接前端回傳路線，並將 AI 端對話紀錄資料送入 `Persistence Layer` 保存。 |
-| `F007` | `N7` | `controller_to_frontend_return` | 後端流程控制層 -> 前端介面層 | `N6` | 結束 | 本輪結果屬於追問情境，控制層將內容送回前端並結束本輪主流程。 |
+| `F005` | `N5` | `controller_to_response_or_planning_or_chat_branch` | 後端流程控制層 -> `Response Module`、`Planning Module` 或 `Chat Module` | `N4` | `N6`、`N8` 或 `N19` | 若 `Questioning Module` 判斷需要追問，則進入 `Response Module`；若判斷資訊已足以建立或修改規劃，則進入規劃相關處理；若本輪屬於規劃相關問答，則進入 `Chat Module`。 |
+| `F006` | `N6` | `response_to_controller_return_and_persistence_store` | `Response Module` -> 後端流程控制層與 `Persistence Layer` | `N5` | `N7` 與 結束 | `Response Module` 已將追問文字準備完成，因此會同步將結果交回控制層承接前端回傳路線，並將 AI 端對話紀錄資料送入 `Persistence Layer` 保存。 |
+| `F007` | `N7` | `controller_to_frontend_return` | 後端流程控制層 -> 前端介面層 | `N6` | 結束 | 本輪結果屬於追問或規劃相關問答情境，控制層將內容送回前端並結束本輪主流程。 |
 | `F008` | `N8` | `planning_to_controller_return` | `Planning Module` -> 後端流程控制層 | `N5` | `N9` | `Planning Module` 已完成中介規劃分析，因此先將規劃結果交回控制層承接。 |
 | `F009` | `N9` | `planning_to_output_structuring_and_response_dispatch` | 後端流程控制層 -> `Output Structuring Module` 與 `Response Module` | `N8` | `N10` 與 `N11` | 控制層承接 `Planning Module` 的規劃結果後，會將同一份規劃基礎資料以同步派送狀態同時送入 `Output Structuring Module` 與 `Response Module`。 |
 | `F010` | `N10` | `output_structuring_to_controller_return` | `Output Structuring Module` -> 後端流程控制層 | `N9` | `N12` | `Output Structuring Module` 已完成結構化結果，因此先將資料交回控制層承接。 |
@@ -98,6 +98,8 @@
 | `F016` | `N16` | `controller_to_persistence_conversation_history_transfer` | 後端流程控制層 -> `Persistence Layer` | `N15` | `N17` | 控制層承接歷史查詢請求後，將指定對話的歷史查詢需求送入 `Persistence Layer`。 |
 | `F017` | `N17` | `persistence_to_controller_conversation_history_return` | `Persistence Layer` -> 後端流程控制層 | `N16` | `N18` | `Persistence Layer` 已完成歷史對話紀錄查詢與打包，因此將歷史對話資料交回控制層承接。 |
 | `F018` | `N18` | `controller_to_frontend_conversation_history_return` | 後端流程控制層 -> 前端介面層 | `N17` | 結束 | 控制層承接歷史對話資料後，將內容回傳前端，用於重建對話畫面。 |
+| `F019` | `N19` | `controller_to_chat_transfer` | 後端流程控制層 -> `Chat Module` | `N5` | `N20` | 控制層判定本輪屬於規劃相關問答，且不應建立或修改排程，因此將上下文、既有規劃摘要與本輪問題交給 `Chat Module`。 |
+| `F020` | `N20` | `chat_to_response_return_and_persistence_store` | `Chat Module` -> `Response Module` -> 後端流程控制層與 `Persistence Layer` | `N19` | `N7` 與 結束 | `Chat Module` 已完成 JSON 回答結果，因此交由 `Response Module` 包裝成前端對話區可顯示的文字，並將 AI 端對話紀錄資料送入 `Persistence Layer` 保存。此路線不進入 `Output Structuring Module`，也不更新結構化排程資料。 |
 
 ---
 

@@ -1,17 +1,18 @@
 # 系統模組說明
 
-更新日期時間：2026-05-01 02:03:00
+更新日期時間：2026-06-16 00:00:00
 
 ## 核心功能模組
 
-本系統可細分為六個核心模組：
+本系統可細分為七個核心處理模組與一個資料持久化層：
 
 1. Context Engineering Module
 2. Response Module
 3. Questioning Module
-4. Planning Module
-5. Output Structuring Module
-6. Persistence Module
+4. Chat Module
+5. Planning Module
+6. Output Structuring Module
+7. Persistence Module
 
 ---
 
@@ -21,13 +22,14 @@
 
 1. 使用者輸入需求
 2. Context Engineering Module 整理需求與上下文
-3. Questioning Module 判斷是否需補足關鍵資訊
-4. Planning Module 根據上下文進行初始規劃或修改規劃分析
-5. Output Structuring Module 將規劃分析結果整理為結構化排程資料
-6. Response Module 產生對使用者的自然語言回覆
-7. Persistence Module 保存需求、對話與規劃結果，供後續流程重複使用
+3. Questioning Module 判斷是否需補足關鍵資訊，或是否可進入下一條路線
+4. 若本輪是一般規劃相關提問，Chat Module 產生回答內容
+5. 若本輪需要建立或修改排程，Planning Module 根據上下文進行初始規劃或修改規劃分析
+6. Output Structuring Module 將規劃分析結果整理為結構化排程資料
+7. Response Module 產生或包裝對使用者的自然語言回覆
+8. Persistence Module 保存需求、對話與規劃結果，供後續流程重複使用
 
-其中，Persistence Module 並非只在流程最後才參與，而是作為整個系統的持久化支援層，持續提供歷史紀錄與既有規劃資料，讓 Context Engineering Module 與 Planning Module 能在後續互動中取得必要脈絡。
+其中，Persistence Module 並非只在流程最後才參與，而是作為整個系統的持久化支援層，持續提供歷史紀錄與既有規劃資料，讓 Context Engineering Module、Chat Module 與 Planning Module 能在後續互動中取得必要脈絡。
 
 ---
 
@@ -64,7 +66,7 @@
 
 ### 模組輸出
 
-- 一份整理後的任務上下文資料，提供 Questioning Module、Planning Module 與 Response Module 使用
+- 一份整理後的任務上下文資料，提供 Questioning Module、Chat Module、Planning Module 與 Response Module 使用
 
 ---
 
@@ -84,9 +86,12 @@
 - 追問前的引導文字
 - 初步規劃完成後的摘要說明
 - 修改完成後的調整說明
+- Chat Module 回答結果的對話區文字包裝
 - 對目前規劃狀態的簡短回應
 
-此模組可參考 Context Engineering Module 整理出的上下文、Questioning Module 的提問結果，以及 Output Structuring Module 所整理出的最終規劃內容，產生適合顯示於對話區的說明文字。
+此模組可參考 Context Engineering Module 整理出的上下文、Questioning Module 的提問結果、Chat Module 的回答結果，以及 Output Structuring Module 所整理出的最終規劃內容，產生適合顯示於對話區的說明文字。
+
+Response Module 不負責產生規劃相關問題的實質建議內容。若本輪是 `chat` 情境，實質回答應由 Chat Module 產生，Response Module 僅負責整理為前端可呈現的文字。
 
 ### 回覆類型
 
@@ -94,6 +99,7 @@
 - 引導說明回覆
 - 規劃摘要回覆
 - 修改結果回覆
+- Chat 回答包裝回覆
 - 狀態說明回覆
 
 ### 模組輸出
@@ -137,7 +143,37 @@
 
 ---
 
-## 模組四：Planning Module
+## 模組四：Chat Module
+
+### 模組目的
+
+此模組的主要功能，是在不修改排程資料的前提下，回答使用者針對目前任務、既有規劃、執行方法或學習策略所提出的一般問題。
+
+本系統的使用者不一定熟悉如何規劃任務，因此除了建立與修改排程之外，也需要能透過自然語言詢問「為什麼這樣安排」、「某階段該怎麼做」、「有哪些練習方向」或「是否有可參考資源」。Chat Module 即負責承接這類與規劃相關但不要求更新排程的需求。
+
+### 功能說明
+
+當 Context Engineering Module 判斷本輪輸入屬於 `chat` 意圖，且 Questioning Module 判斷目前資訊足以回答時，控制層可將資料轉交給 Chat Module。
+
+Chat Module 可根據使用者本輪問題、整理後上下文、既有規劃摘要與必要歷史對話，產生一份固定 JSON 格式的回答結果。此回答結果可再交由 Response Module 包裝成對話區文字。
+
+此模組的設計重點，是將「回答規劃相關問題」與「建立或修改排程」分開。只有在使用者明確要求加入、調整、重排或拆細排程時，才應進入 Planning Module 的修改路線。
+
+### 可處理的問題
+
+- 解釋目前規劃的安排理由
+- 回答某個階段或子任務的執行方法
+- 提供練習方向、學習策略或注意事項
+- 提供一般資源方向或準備建議
+- 評估目前規劃可能的風險或執行重點
+
+### 模組輸出
+
+- 一份結構化的回答結果，提供 Response Module 包裝為前端對話區文字
+
+---
+
+## 模組五：Planning Module
 
 ### 模組目的
 
@@ -169,6 +205,8 @@
 
 在 revision planning mode 下，本模組可透過 Persistence Module 取得目前排程結構與關鍵歷史紀錄，作為修改分析的依據。
 
+Planning Module 不處理一般 `chat` 問答。若使用者只是詢問建議、原因、資源或執行方向，且未要求更新排程資料，應由 Chat Module 承接。
+
 ### 分析結果可能包含
 
 - 主任務候選項目
@@ -184,7 +222,7 @@
 
 ---
 
-## 模組五：Output Structuring Module
+## 模組六：Output Structuring Module
 
 ### 模組目的
 
@@ -222,7 +260,7 @@
 
 ---
 
-## 模組六：Persistence Module (已升格為Persistence Layer)
+## 模組七：Persistence Module (已升格為Persistence Layer)
 
 ### 模組目的
 
@@ -232,7 +270,7 @@
 
 本系統若要支援對話延續、歷史查詢、規劃修改與多輪互動，就不能只依賴前端暫存或單次對話內容。因此，原本以 `Persistence Module` 描述的資料保存責任，現在已進一步收斂為系統中的 `Persistence Layer`。
 
-目前在文件中仍保留 `Persistence Module` 這個標題，主要是為了延續原有六個核心模組的閱讀脈絡；但在實際架構理解上，它不應再被視為與 Context Engineering、Questioning、Planning、Output Structuring 或 Response 並列的處理模組，而應明確理解為一個獨立的架構層。
+目前在文件中仍保留 `Persistence Module` 這個標題，主要是為了延續原有模組閱讀脈絡；但在實際架構理解上，它不應再被視為與 Context Engineering、Questioning、Chat、Planning、Output Structuring 或 Response 並列的處理模組，而應明確理解為一個獨立的架構層。
 
 換句話說，後續若從系統分層角度討論其責任，應優先使用 `Persistence Layer` 這個說法；`Persistence Module` 則只保留作為本文件沿用舊命名時的閱讀入口。
 

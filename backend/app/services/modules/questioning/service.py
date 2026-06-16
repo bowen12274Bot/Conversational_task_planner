@@ -114,6 +114,45 @@ def _build_guarded_questioning_decision(
             next_step_guidance=["想修改哪一個階段或任務？"],
         )
 
+    if intent_type == "chat" and not has_existing_plan:
+        return _build_follow_up_decision(
+            reasoning="使用者看起來想針對既有規劃提問，但系統目前沒有可參考的既有排程，因此需要先確認要詢問的任務或是否建立規劃。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            missing_items=[
+                {
+                    "label": "constraint",
+                    "question_hint": "目前沒有既有排程可以參考，想先建立一份規劃，還是補充你想詢問的任務內容？",
+                }
+            ],
+            next_step_guidance=[
+                "目前沒有既有排程可以參考，想先建立一份規劃，還是補充你想詢問的任務內容？"
+            ],
+        )
+
+    if intent_type == "chat" and has_existing_plan:
+        return QuestioningDecision(
+            decision="planning",
+            reasoning="使用者正在針對既有規劃提問，且系統已有可參考的排程內容，因此可進入 Chat Module 回答。",
+            known_information=list(context_output.known_information),
+            pending_confirmation=list(context_output.pending_confirmation),
+            next_step_guidance=["進入 Chat Module 回答規劃相關問題。"],
+        )
+
+    if intent_type == "other" and has_existing_plan:
+        return _build_follow_up_decision(
+            reasoning="系統已有既有排程，但本輪目的不是明確的建立、修改或規劃相關提問，因此需要先確認使用者想做什麼。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            missing_items=[
+                {
+                    "label": "constraint",
+                    "question_hint": "你是想修改目前排程、詢問排程內容，還是建立新的規劃？",
+                }
+            ],
+            next_step_guidance=["你是想修改目前排程、詢問排程內容，還是建立新的規劃？"],
+        )
+
     if has_existing_plan or intent_type == "revise":
         return None
 

@@ -100,8 +100,9 @@ def _parse_context_engineering_result(
     pending_confirmation = _collect_information_list(
         parsed_output.get("pending_confirmation")
     )
-    known_information, pending_confirmation = _preserve_explicit_current_turn_facts(
+    known_information, pending_confirmation = _preserve_explicit_user_facts(
         user_input=user_input,
+        conversation_history_text=conversation_history_text,
         known_information=known_information,
         pending_confirmation=pending_confirmation,
     )
@@ -186,35 +187,72 @@ def _collect_planning_intent(value: Any) -> PlanningIntent:
             confidence="low",
         )
 
+    try:
+        return PlanningIntent.model_validate(value)
+    except Exception:
+        return PlanningIntent(
+            intent_type="other",
+            target_main_task_order=None,
+            confidence="low",
+        )
 
-def _preserve_explicit_current_turn_facts(
+
+def _preserve_explicit_user_facts(
     *,
     user_input: str,
+    conversation_history_text: str | None,
     known_information: list[dict[str, Any]],
     pending_confirmation: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    deadline_hint = _extract_explicit_deadline_hint(user_input)
-    if deadline_hint is None:
-        return known_information, pending_confirmation
+    user_text = _build_user_fact_source_text(
+        user_input=user_input,
+        conversation_history_text=conversation_history_text,
+    )
+    explicit_facts = {
+        "deadline_hint": _extract_explicit_deadline_hint(user_text),
+        "time_budget": _extract_explicit_time_budget(user_text),
+    }
 
     updated_known_information = list(known_information)
-    if not _has_information_label(
-        known_information,
-        "deadline_hint",
-        value_key="value",
-    ):
-        updated_known_information.append(
-            {
-                "label": "deadline_hint",
-                "value": deadline_hint,
-            }
-        )
-    updated_pending_confirmation = [
-        item
-        for item in pending_confirmation
-        if item.get("label") != "deadline_hint"
-    ]
+    updated_pending_confirmation = list(pending_confirmation)
+    for label, value in explicit_facts.items():
+        if value is None:
+            continue
+        if not _has_information_label(
+            updated_known_information,
+            label,
+            value_key="value",
+        ):
+            updated_known_information.append(
+                {
+                    "label": label,
+                    "value": value,
+                }
+            )
+        updated_pending_confirmation = [
+            item
+            for item in updated_pending_confirmation
+            if item.get("label") != label
+        ]
+
     return updated_known_information, updated_pending_confirmation
+
+
+def _build_user_fact_source_text(
+    *,
+    user_input: str,
+    conversation_history_text: str | None,
+) -> str:
+    user_lines: list[str] = []
+    if conversation_history_text is not None:
+        for raw_line in conversation_history_text.splitlines():
+            line = raw_line.strip()
+            lowered = line.lower()
+            if lowered.startswith("user:"):
+                user_lines.append(line[5:].strip())
+
+    user_lines.append(user_input.strip())
+    return "\n".join(line for line in user_lines if line)
 
 
 def _extract_explicit_deadline_hint(user_input: str) -> str | None:
@@ -226,6 +264,10 @@ def _extract_explicit_deadline_hint(user_input: str) -> str | None:
     if days_match:
         return f"{days_match.group(1)}天內"
 
+    week_match = re.search(r"([0-9一二兩三四五六七八九十]+)(?:個)?(?:週|周|星期)(後|內)", normalized_input)
+    if week_match:
+        return f"{week_match.group(1)}週{week_match.group(2)}"
+
     if "後天" in normalized_input:
         return "後天"
     if "明天" in normalized_input:
@@ -234,6 +276,28 @@ def _extract_explicit_deadline_hint(user_input: str) -> str | None:
         return "今天"
     if "下週" in normalized_input or "下周" in normalized_input:
         return "下週"
+
+    return None
+
+
+def _extract_explicit_time_budget(user_input: str) -> str | None:
+    normalized_input = user_input.strip().replace(" ", "")
+    if not normalized_input:
+        return None
+
+    daily_match = re.search(
+        r"(?:每天|每日|一天|平均一天)(?:可|可以|能|大約|大概|約|平均|投入|可投入)*([0-9一二兩三四五六七八九十]+)(?:個)?小時",
+        normalized_input,
+    )
+    if daily_match:
+        return f"一天{daily_match.group(1)}小時"
+
+    weekly_match = re.search(
+        r"(?:每週|每周|一週|一周)(?:可|可以|能|大約|大概|約|平均|投入|可投入)*([0-9一二兩三四五六七八九十]+)(?:個)?小時",
+        normalized_input,
+    )
+    if weekly_match:
+        return f"每週{weekly_match.group(1)}小時"
 
     return None
 
@@ -251,15 +315,6 @@ def _has_information_label(
         if isinstance(value, str) and value.strip():
             return True
     return False
-
-    try:
-        return PlanningIntent.model_validate(value)
-    except Exception:
-        return PlanningIntent(
-            intent_type="other",
-            target_main_task_order=None,
-            confidence="low",
-        )
 
 
 def _collect_information_list(value: Any) -> list[dict[str, Any]]:

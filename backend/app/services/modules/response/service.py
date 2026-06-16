@@ -1,5 +1,6 @@
 from app.schemas import (
     AIToModuleResult,
+    ChatResponseInput,
     PlanningRevisionResponseInput,
     PlanningResponseInput,
     QuestioningDecision,
@@ -95,6 +96,21 @@ def build_response_from_planning_revision(
     return ResponseOutput(
         reply_text=f"已更新「{target_title}」，右側規劃面板已同步調整。{revision_summary}。",
         response_type="planning_revision_summary",
+    )
+
+
+def build_response_from_chat(
+    chat_response_input: ChatResponseInput,
+) -> ResponseOutput:
+    """根據 Chat Module 結果建立對前端可顯示的自然語言回覆。"""
+
+    answer = chat_response_input.chat_output.answer.strip()
+    if not answer:
+        raise ValueError("chat_response_input.chat_output.answer 不可為空白。")
+
+    return ResponseOutput(
+        reply_text=answer,
+        response_type="chat_answer",
     )
 
 

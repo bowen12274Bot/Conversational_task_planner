@@ -28,6 +28,11 @@ from app.schemas.flow_contracts import (
     FlowStageExecutionState,
 )
 from app.schemas.module_contracts import (
+    ChatModuleInput,
+    ChatModuleOutput,
+    ChatReferencedPlan,
+    ChatResponseInput,
+    ChatSuggestedFollowUpAction,
     ContextEngineeringOutput,
     PlanningCreateInput,
     PlanningCreateOutput,
@@ -50,6 +55,11 @@ from app.schemas.module_contracts import (
 
 __all__ = [
     "AIToModuleResult",
+    "ChatModuleInput",
+    "ChatModuleOutput",
+    "ChatReferencedPlan",
+    "ChatResponseInput",
+    "ChatSuggestedFollowUpAction",
     "ContextEngineeringOutput",
     "PlanningCreateInput",
     "PlanningCreateOutput",

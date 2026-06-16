@@ -348,6 +348,106 @@ def test_build_context_from_raw_input_preserves_explicit_current_turn_deadline_w
     assert known_information["deadline_hint"] == "明天"
 
 
+def test_build_context_from_raw_input_preserves_deadline_and_time_budget_from_user_history(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: (
+            "user: 我三週後需完成的課程小專題，幫我安排規劃\n"
+            "ai: 目前專題已經完成到哪個階段？接下來三週內每天大約可以投入多少時間？\n"
+            "user: 目前正打算從需求分析開始，我平均一天可投入4小時"
+        ),
+    )
+    monkeypatch.setattr(
+        context_service,
+        "run_ai_flow",
+        lambda request: AIToModuleResult(
+            success=True,
+            output_result={
+                "text": (
+                    '{"requirement_context":"使用者準備課程小專題，目前打算從需求分析開始。",'
+                    '"known_information":['
+                    '{"label":"task_type","value":"課程小專題"},'
+                    '{"label":"current_progress","value":"目前正打算從需求分析開始"}'
+                    "],"
+                    '"pending_confirmation":['
+                    '{"label":"deadline_hint","question_hint":"預計什麼時候要完成？"},'
+                    '{"label":"time_budget","question_hint":"每天可投入多少時間？"}'
+                    "],"
+                    '"planning_intent":{'
+                    '"intent_type":"create",'
+                    '"target_main_task_order":null,'
+                    '"confidence":"high"'
+                    "}}"
+                ),
+            },
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "目前正打算從需求分析開始，我平均一天可投入4小時",
+        conversation_id="conv-001",
+    )
+
+    known_information = {
+        item.get("label"): item.get("value")
+        for item in result.known_information
+        if isinstance(item, dict)
+    }
+    pending_labels = {
+        item.get("label")
+        for item in result.pending_confirmation
+        if isinstance(item, dict)
+    }
+
+    assert known_information["deadline_hint"] == "三週後"
+    assert known_information["time_budget"] == "一天4小時"
+    assert "deadline_hint" not in pending_labels
+    assert "time_budget" not in pending_labels
+
+
+def test_build_context_from_raw_input_preserves_planning_intent_from_ai_output(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        context_service,
+        "get_conversation_transcript",
+        lambda conversation_id: None,
+    )
+    monkeypatch.setattr(
+        context_service,
+        "run_ai_flow",
+        lambda request: AIToModuleResult(
+            success=True,
+            output_result={
+                "text": (
+                    '{"requirement_context":"使用者詢問第三階段練習方向。",'
+                    '"known_information":[],'
+                    '"pending_confirmation":[],'
+                    '"planning_intent":{'
+                    '"intent_type":"chat",'
+                    '"target_main_task_order":3,'
+                    '"confidence":"high"'
+                    "}}"
+                ),
+            },
+        ),
+    )
+
+    result = context_service.build_context_from_raw_input(
+        "第三階段有沒有練習方向？",
+        conversation_id="conv-001",
+        existing_plan_outline=[{"order": 3, "title": "第三階段：實戰衝刺期"}],
+    )
+
+    assert result.planning_intent is not None
+    assert result.planning_intent.intent_type == "chat"
+    assert result.planning_intent.target_main_task_order == 3
+    assert result.planning_intent.confidence == "high"
+
+
 @pytest.mark.skipif(
     not (AI_STUDIO_API_KEY or OPENROUTER_API_KEY),
     reason="No real AI provider API key is configured.",

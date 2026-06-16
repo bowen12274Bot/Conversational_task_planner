@@ -181,7 +181,9 @@ export function useConversationSession() {
         content: response.reply_text,
         timestamp: response.reply_created_at ?? createTimestamp(),
       })
-      structuredTaskOutput.value = response.structured_task_output ?? null
+      if (response.structured_task_output) {
+        structuredTaskOutput.value = response.structured_task_output
+      }
       persistConversationCache()
       return { ok: true }
     } catch (error) {

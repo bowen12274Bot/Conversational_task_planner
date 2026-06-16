@@ -92,7 +92,7 @@ def _validate_planning_intent(
         )
 
     intent_type = value.get("intent_type")
-    if intent_type not in {"create", "revise", "other"}:
+    if intent_type not in {"create", "revise", "chat", "other"}:
         return ContextEngineeringValidationResult(
             is_valid=False,
             action="regenerate",

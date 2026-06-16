@@ -245,3 +245,69 @@ def test_evaluate_questioning_need_guards_revise_intent_without_existing_plan(
     assert result.decision == "follow_up"
     assert result.pending_confirmation[0]["label"] == "constraint"
     assert "沒有可修改" in result.next_step_guidance[0]
+
+
+def test_evaluate_questioning_need_allows_chat_intent_with_existing_plan(
+    monkeypatch,
+) -> None:
+    def fail_if_ai_is_called(request):
+        raise AssertionError("guarded questioning should not call AI")
+
+    monkeypatch.setattr(questioning_service, "run_ai_flow", fail_if_ai_is_called)
+
+    context_output = ContextEngineeringOutput(
+        requirement_context="使用者詢問第三階段的模擬試題練習方向與學習管道。",
+        known_information=[
+            {"label": "constraint", "value": "提問目標為既有規劃第三階段"},
+        ],
+        pending_confirmation=[],
+        conversation_history_text=None,
+        planning_intent={
+            "intent_type": "chat",
+            "target_main_task_order": 3,
+            "confidence": "high",
+        },
+    )
+
+    result = questioning_service.evaluate_questioning_need(
+        context_output=context_output,
+        follow_up_round_count=0,
+        has_existing_plan=True,
+        existing_plan_outline=[
+            {"order": 3, "title": "第三階段：實戰衝刺期"},
+        ],
+    )
+
+    assert result.decision == "planning"
+    assert "Chat Module" in result.next_step_guidance[0]
+
+
+def test_evaluate_questioning_need_guards_chat_intent_without_existing_plan(
+    monkeypatch,
+) -> None:
+    def fail_if_ai_is_called(request):
+        raise AssertionError("guarded questioning should not call AI")
+
+    monkeypatch.setattr(questioning_service, "run_ai_flow", fail_if_ai_is_called)
+
+    context_output = ContextEngineeringOutput(
+        requirement_context="使用者詢問第三階段的模擬試題練習方向與學習管道。",
+        known_information=[],
+        pending_confirmation=[],
+        conversation_history_text=None,
+        planning_intent={
+            "intent_type": "chat",
+            "target_main_task_order": 3,
+            "confidence": "high",
+        },
+    )
+
+    result = questioning_service.evaluate_questioning_need(
+        context_output=context_output,
+        follow_up_round_count=0,
+        has_existing_plan=False,
+    )
+
+    assert result.decision == "follow_up"
+    assert result.pending_confirmation[0]["label"] == "constraint"
+    assert "沒有既有排程" in result.next_step_guidance[0]

@@ -38,6 +38,10 @@ def test_build_context_engineering_ai_request_contains_format_requirements() -> 
         "pending_confirmation",
         "planning_intent",
     ]
+    assert any(
+        "create, revise, chat, or other" in requirement
+        for requirement in request.format_requirements["requirements"]
+    )
     assert request.format_requirements["allowed_labels"]["values"]
 
 

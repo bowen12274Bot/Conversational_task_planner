@@ -99,6 +99,21 @@ def _parse_estimated_time_to_minutes(value: str) -> int | None:
     if not normalized:
         return None
 
+    has_minute_unit = (
+        "分鐘" in normalized
+        or "分" in normalized
+        or "min" in normalized
+        or normalized.endswith("m")
+    )
+    has_hour_unit = (
+        "小時" in normalized
+        or "hour" in normalized
+        or "hr" in normalized
+        or normalized.endswith("h")
+    )
+    if not has_minute_unit and not has_hour_unit:
+        return None
+
     range_match = re.search(r"(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)", normalized)
     range_average = (
         (float(range_match.group(1)) + float(range_match.group(2))) / 2
@@ -113,13 +128,13 @@ def _parse_estimated_time_to_minutes(value: str) -> int | None:
     if base_value is None:
         return None
 
-    if "分鐘" in normalized or "min" in normalized or normalized.endswith("m"):
+    if has_minute_unit:
         return round(base_value)
 
-    if "小時" in normalized or "hour" in normalized or normalized.endswith("h"):
+    if has_hour_unit:
         return round(base_value * 60)
 
-    return round(base_value * 60)
+    return None
 
 
 def _format_minutes_label(minutes: int) -> str:

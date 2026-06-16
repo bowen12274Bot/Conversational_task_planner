@@ -15,6 +15,9 @@ MAX_QUESTIONING_RETRY_COUNT = 3
 def evaluate_questioning_need(
     context_output: ContextEngineeringOutput,
     follow_up_round_count: int,
+    *,
+    has_existing_plan: bool = False,
+    existing_plan_outline: list[dict[str, Any]] | None = None,
 ) -> QuestioningDecision:
     """根據整理後需求狀態判斷下一步應追問或進入規劃。"""
 
@@ -22,11 +25,26 @@ def evaluate_questioning_need(
     if not requirement_context:
         raise ValueError("requirement_context 不可為空白。")
 
+    guarded_decision = _build_guarded_questioning_decision(
+        context_output=context_output,
+        follow_up_round_count=follow_up_round_count,
+        has_existing_plan=has_existing_plan,
+    )
+    if guarded_decision is not None:
+        return guarded_decision
+
     ai_request = build_questioning_ai_request(
         requirement_context=requirement_context,
         known_information=context_output.known_information,
         pending_confirmation=context_output.pending_confirmation,
         follow_up_round_count=follow_up_round_count,
+        planning_intent=(
+            context_output.planning_intent.model_dump()
+            if context_output.planning_intent is not None
+            else None
+        ),
+        has_existing_plan=has_existing_plan,
+        existing_plan_outline=existing_plan_outline,
     )
 
     retry_count = 0
@@ -54,6 +72,199 @@ def evaluate_questioning_need(
         f"{MAX_QUESTIONING_RETRY_COUNT} attempts. "
         f"reason={last_failure_reason}, details={last_failure_details}"
     )
+
+
+def _build_guarded_questioning_decision(
+    *,
+    context_output: ContextEngineeringOutput,
+    follow_up_round_count: int,
+    has_existing_plan: bool,
+) -> QuestioningDecision | None:
+    planning_intent = context_output.planning_intent
+    intent_type = planning_intent.intent_type if planning_intent is not None else None
+    target_main_task_order = (
+        planning_intent.target_main_task_order if planning_intent is not None else None
+    )
+
+    if intent_type == "revise" and not has_existing_plan:
+        return _build_follow_up_decision(
+            reasoning="使用者看起來想修改既有排程，但系統目前沒有可修改的既有排程，因此需要先確認是否要建立新規劃。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            missing_items=[
+                {
+                    "label": "constraint",
+                    "question_hint": "目前沒有可修改的既有排程，是否要改為建立一份新的規劃？",
+                }
+            ],
+            next_step_guidance=["目前沒有可修改的既有排程，是否要改為建立一份新的規劃？"],
+        )
+
+    if intent_type == "revise" and has_existing_plan and target_main_task_order is None:
+        return _build_follow_up_decision(
+            reasoning="使用者看起來想修改既有排程，但目前無法確認要修改哪一個階段或任務，因此需要先追問修改範圍。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            missing_items=[
+                {
+                    "label": "constraint",
+                    "question_hint": "想修改哪一個階段或任務？",
+                }
+            ],
+            next_step_guidance=["想修改哪一個階段或任務？"],
+        )
+
+    if has_existing_plan or intent_type == "revise":
+        return None
+
+    missing_minimum_basis = _collect_missing_minimum_basis(
+        context_output.known_information,
+        context_output.pending_confirmation,
+    )
+    if missing_minimum_basis:
+        return _build_follow_up_decision(
+            reasoning="目前尚未具備任務內容與期限這兩項最小規劃基礎，因此需要先補齊關鍵資訊。",
+            known_information=context_output.known_information,
+            pending_confirmation=context_output.pending_confirmation,
+            missing_items=missing_minimum_basis,
+            next_step_guidance=[
+                item["question_hint"] for item in missing_minimum_basis
+            ],
+        )
+
+    if (
+        follow_up_round_count == 0
+        and _looks_like_learning_or_exam_plan(context_output)
+    ):
+        missing_learning_items = _collect_missing_learning_planning_context(
+            context_output.known_information,
+            context_output.pending_confirmation,
+        )
+        if missing_learning_items:
+            return _build_follow_up_decision(
+                reasoning="這是學習或考試準備類規劃，初次規劃前若缺少可投入時間或目前程度，會明顯影響排程密度與安排方向，因此應先追問。",
+                known_information=context_output.known_information,
+                pending_confirmation=context_output.pending_confirmation,
+                missing_items=missing_learning_items,
+                next_step_guidance=[
+                    item["question_hint"] for item in missing_learning_items
+                ],
+            )
+
+    return None
+
+
+def _collect_missing_minimum_basis(
+    known_information: list[dict[str, Any]],
+    pending_confirmation: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    missing_items: list[dict[str, str]] = []
+    if not _has_known_label(known_information, "task_type"):
+        missing_items.append(
+            {
+                "label": "task_type",
+                "question_hint": "想規劃的任務或目標是什麼？",
+            }
+        )
+    if not _has_known_label(known_information, "deadline_hint"):
+        missing_items.append(
+            {
+                "label": "deadline_hint",
+                "question_hint": "預計什麼時候要完成？",
+            }
+        )
+
+    return missing_items
+
+
+def _collect_missing_learning_planning_context(
+    known_information: list[dict[str, Any]],
+    pending_confirmation: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    missing_items: list[dict[str, str]] = []
+    if not _has_known_label(known_information, "time_budget"):
+        missing_items.append(
+            {
+                "label": "time_budget",
+                "question_hint": "每天或每週大約可以投入多少時間？",
+            }
+        )
+    if not _has_known_label(known_information, "current_progress"):
+        missing_items.append(
+            {
+                "label": "current_progress",
+                "question_hint": "目前程度或準備進度大約到哪裡？",
+            }
+        )
+
+    return missing_items
+
+
+def _build_follow_up_decision(
+    *,
+    reasoning: str,
+    known_information: list[dict[str, Any]],
+    pending_confirmation: list[dict[str, Any]],
+    missing_items: list[dict[str, str]],
+    next_step_guidance: list[str],
+) -> QuestioningDecision:
+    merged_pending_confirmation = list(pending_confirmation)
+    existing_pending_labels = {
+        item.get("label") for item in merged_pending_confirmation if isinstance(item, dict)
+    }
+    for item in missing_items:
+        if item["label"] not in existing_pending_labels:
+            merged_pending_confirmation.append(dict(item))
+
+    return QuestioningDecision(
+        decision="follow_up",
+        reasoning=reasoning,
+        known_information=list(known_information),
+        pending_confirmation=merged_pending_confirmation,
+        next_step_guidance=[guidance for guidance in next_step_guidance if guidance],
+    )
+
+
+def _has_known_label(
+    known_information: list[dict[str, Any]],
+    label: str,
+) -> bool:
+    for item in known_information:
+        if item.get("label") != label:
+            continue
+        value = item.get("value")
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
+def _looks_like_learning_or_exam_plan(
+    context_output: ContextEngineeringOutput,
+) -> bool:
+    text_parts = [context_output.requirement_context]
+    for item in context_output.known_information:
+        value = item.get("value")
+        if isinstance(value, str):
+            text_parts.append(value)
+
+    normalized_text = "".join(text_parts).lower()
+    keywords = (
+        "學習",
+        "考試",
+        "備考",
+        "準備",
+        "多益",
+        "toeic",
+        "托福",
+        "toefl",
+        "雅思",
+        "ielts",
+        "英文",
+        "英語",
+        "證照",
+        "檢定",
+    )
+    return any(keyword in normalized_text for keyword in keywords)
 
 
 def _parse_questioning_result(

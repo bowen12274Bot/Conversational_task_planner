@@ -1,6 +1,7 @@
 from app.schemas import (
     AIToModuleResult,
     PlanningResponseInput,
+    StructuredSummaryMetricsOutput,
     StructuredTaskOutput,
 )
 from app.services.modules.response import service as response_service
@@ -58,6 +59,11 @@ def test_build_fallback_planning_response_returns_plain_text_summary() -> None:
             design_rationale="期限明確，因此先排需求確認與核心實作。",
             structured_task_output=StructuredTaskOutput(
                 plan_summary="先完成需求確認，再安排核心實作與測試。",
+                summary_metrics=StructuredSummaryMetricsOutput(
+                    total_estimated_time_text="待確認",
+                    daily_time_budget_text="待確認",
+                    estimated_completion_text="待確認",
+                ),
                 main_tasks=[],
             ),
         )

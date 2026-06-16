@@ -1,5 +1,6 @@
 from app.schemas import (
     AIToModuleResult,
+    PlanningRevisionResponseInput,
     PlanningResponseInput,
     QuestioningDecision,
     ResponseOutput,
@@ -77,6 +78,24 @@ def build_response_from_planning(
         retry_count += 1
 
     return _build_fallback_planning_response(planning_response_input)
+
+
+def build_response_from_planning_revision(
+    revision_response_input: PlanningRevisionResponseInput,
+) -> ResponseOutput:
+    """根據 planning revision 結果生成對前端可顯示的修改完成回覆。"""
+
+    target_title = revision_response_input.target_main_task_title.strip()
+    revision_summary = revision_response_input.revision_summary.strip().rstrip("。")
+    if not target_title:
+        raise ValueError("revision_response_input.target_main_task_title 不可為空白。")
+    if not revision_summary:
+        raise ValueError("revision_response_input.revision_summary 不可為空白。")
+
+    return ResponseOutput(
+        reply_text=f"已更新「{target_title}」，右側規劃面板已同步調整。{revision_summary}。",
+        response_type="planning_revision_summary",
+    )
 
 
 def _extract_response_text(ai_result: AIToModuleResult) -> str | None:

@@ -14,12 +14,14 @@ CAPABILITY_LEVEL = "default"
 def build_context_engineering_ai_request(
     user_input: str,
     conversation_history_text: str | None = None,
+    existing_plan_outline: list[dict[str, Any]] | None = None,
 ) -> ModuleToAIRequest:
     """建立 Context Engineering 專用的 AI 請求資料。"""
 
     prompt_spec = build_context_engineering_prompt_spec(
         user_input=user_input,
         conversation_history_text=conversation_history_text,
+        existing_plan_outline=existing_plan_outline,
     )
 
     return ModuleToAIRequest(
@@ -34,6 +36,7 @@ def build_context_engineering_ai_request(
 def build_context_engineering_prompt_spec(
     user_input: str,
     conversation_history_text: str | None = None,
+    existing_plan_outline: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """整理 Context Engineering 任務的 prompt 規格。"""
 
@@ -46,6 +49,7 @@ def build_context_engineering_prompt_spec(
     context = _build_context_data(
         user_input=normalized_input,
         conversation_history_text=conversation_history_text,
+        existing_plan_outline=existing_plan_outline,
     )
     examples = _build_examples()
     output_target = _build_output_target()
@@ -99,11 +103,16 @@ def _build_format_requirements() -> dict[str, Any]:
             "requirement_context",
             "known_information",
             "pending_confirmation",
+            "planning_intent",
         ],
         "requirements": [
             "requirement_context must be a concise string summary of the current requirement and current situation.",
             "known_information must be a list of objects containing only information clearly supported by the current raw requirement or prior user messages that are still relevant.",
             "pending_confirmation must be a list of objects for important missing, unclear, or conflicting information that should be clarified later.",
+            "planning_intent must be an object containing intent_type, target_main_task_order, and confidence.",
+            "planning_intent.intent_type must be one of create, revise, or other.",
+            "planning_intent.target_main_task_order must be a positive integer when the current request clearly targets one existing main task; otherwise use null.",
+            "planning_intent.confidence must be one of high, medium, or low.",
             "Use label and value for each known_information item.",
             "Use label and question_hint for each pending_confirmation item.",
             "Do not invent deadlines, progress, constraints, or difficulties that were not stated by the user.",
@@ -126,8 +135,10 @@ def _build_rules_text() -> str:
         "You are a requirement analysis assistant. "
         "Use the current raw requirement as the primary input for this turn. "
         "Use prior conversation history to help interpret the current turn and preserve relevant known_information and pending_confirmation continuity. "
+        "If an existing plan outline is provided, use it only to identify whether the current turn appears to create a new plan, revise an existing plan, or do something else. "
         "When deciding confirmed information, prioritize content clearly supported by user messages, "
         "and treat prior AI replies as contextual references rather than independent confirmed facts. "
+        "Do not decide whether to ask follow-up questions; only organize the observable information and planning intent. "
         "Do not invent deadlines, progress, or constraints that were not stated."
     )
 
@@ -137,9 +148,11 @@ def _build_task_description() -> str:
 
     return (
         "Read the current raw requirement together with the prior conversation history, "
-        "then build a refreshed requirement_context, known_information, and pending_confirmation for this turn. "
+        "then build a refreshed requirement_context, known_information, pending_confirmation, and planning_intent for this turn. "
         "If prior user-provided facts are still relevant and not contradicted, explicitly keep them in known_information for the current turn instead of dropping them. "
         "When a previous user message has already established task type, deadline, time budget, progress, difficulty, or constraint information and the current turn does not replace or conflict with it, preserve that information in known_information while adding the new details from the current turn. "
+        "Set planning_intent.intent_type to create when the user appears to request a new plan, revise when the user appears to refine or change an existing plan, and other when the current turn is not a planning creation or revision request. "
+        "When intent_type is revise, set target_main_task_order only if the current turn clearly points to one item from existing_plan_outline. "
         "If the current raw requirement clearly corrects or updates prior information, use the current raw requirement as the new source of truth. "
         "If the current raw requirement conflicts with prior history but the correction is unclear, do not force a resolution; "
         "move the conflicting item into pending_confirmation instead."
@@ -149,6 +162,7 @@ def _build_task_description() -> str:
 def _build_context_data(
     user_input: str,
     conversation_history_text: str | None = None,
+    existing_plan_outline: list[dict[str, Any]] | None = None,
 ) -> str:
     """建立上下文層資料。"""
 
@@ -165,7 +179,32 @@ def _build_context_data(
             ]
         )
 
+    if existing_plan_outline:
+        sections.extend(
+            [
+                "",
+                "Existing plan outline:",
+                _format_existing_plan_outline(existing_plan_outline),
+            ]
+        )
+
     return "\n".join(sections)
+
+
+def _format_existing_plan_outline(existing_plan_outline: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for item in existing_plan_outline:
+        order = item.get("order")
+        title = item.get("title")
+        description = item.get("description")
+        if not isinstance(order, int) or not isinstance(title, str) or not title.strip():
+            continue
+        line = f"{order}. {title.strip()}"
+        if isinstance(description, str) and description.strip():
+            line = f"{line} - {description.strip()}"
+        lines.append(line)
+
+    return "\n".join(lines)
 
 
 def _normalize_conversation_history_text(conversation_history_text: str) -> str:
@@ -220,6 +259,11 @@ def _build_examples() -> list[dict[str, Any]]:
                         "question_hint": "每天大約可投入多少時間",
                     },
                 ],
+                "planning_intent": {
+                    "intent_type": "create",
+                    "target_main_task_order": None,
+                    "confidence": "high",
+                },
             },
         },
         {
@@ -245,6 +289,11 @@ def _build_examples() -> list[dict[str, Any]]:
                         "question_hint": "實際期限是下週，還是只剩一天",
                     }
                 ],
+                "planning_intent": {
+                    "intent_type": "create",
+                    "target_main_task_order": None,
+                    "confidence": "medium",
+                },
             },
         },
         {
@@ -284,6 +333,38 @@ def _build_examples() -> list[dict[str, Any]]:
                     },
                 ],
                 "pending_confirmation": [],
+                "planning_intent": {
+                    "intent_type": "create",
+                    "target_main_task_order": None,
+                    "confidence": "high",
+                },
+            },
+        },
+        {
+            "input": (
+                "Current raw requirement:\n"
+                "請問第一階段時可以針對哪些情境練習，以及有沒有甚麼管道能學習\n\n"
+                "Existing plan outline:\n"
+                "1. 第一階段情境重點規劃 - 鎖定多益高頻生活與商務情境。\n"
+                "2. 學習管道與工具建議 - 提供每日可用的學習管道。\n"
+                "3. 題型突破與模擬練習 - 安排考題訓練。"
+            ),
+            "output": {
+                "requirement_context": (
+                    "使用者希望細化既有規劃中的第一階段，補充可練習的情境與學習管道。"
+                ),
+                "known_information": [
+                    {
+                        "label": "constraint",
+                        "value": "修改目標為既有規劃的第一階段",
+                    }
+                ],
+                "pending_confirmation": [],
+                "planning_intent": {
+                    "intent_type": "revise",
+                    "target_main_task_order": 1,
+                    "confidence": "high",
+                },
             },
         },
     ]

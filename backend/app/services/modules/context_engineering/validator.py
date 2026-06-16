@@ -56,6 +56,13 @@ def validate_context_engineering_output(
     if pending_confirmation_error is not None:
         return pending_confirmation_error
 
+    if "planning_intent" in output_data:
+        planning_intent_error = _validate_planning_intent(
+            output_data.get("planning_intent")
+        )
+        if planning_intent_error is not None:
+            return planning_intent_error
+
     return ContextEngineeringValidationResult(
         is_valid=True,
         action="accept",
@@ -71,6 +78,48 @@ def _collect_missing_required_fields(output_data: dict[str, Any]) -> list[str]:
         "pending_confirmation",
     )
     return [field_name for field_name in required_fields if field_name not in output_data]
+
+
+def _validate_planning_intent(
+    value: Any,
+) -> ContextEngineeringValidationResult | None:
+    if not isinstance(value, dict):
+        return ContextEngineeringValidationResult(
+            is_valid=False,
+            action="regenerate",
+            reason="invalid_planning_intent",
+            details={"expected_type": "object"},
+        )
+
+    intent_type = value.get("intent_type")
+    if intent_type not in {"create", "revise", "other"}:
+        return ContextEngineeringValidationResult(
+            is_valid=False,
+            action="regenerate",
+            reason="invalid_planning_intent_type",
+            details={"intent_type": intent_type},
+        )
+
+    target_main_task_order = value.get("target_main_task_order")
+    if target_main_task_order is not None:
+        if not isinstance(target_main_task_order, int) or target_main_task_order < 1:
+            return ContextEngineeringValidationResult(
+                is_valid=False,
+                action="regenerate",
+                reason="invalid_target_main_task_order",
+                details={"target_main_task_order": target_main_task_order},
+            )
+
+    confidence = value.get("confidence")
+    if confidence not in {"high", "medium", "low"}:
+        return ContextEngineeringValidationResult(
+            is_valid=False,
+            action="regenerate",
+            reason="invalid_planning_intent_confidence",
+            details={"confidence": confidence},
+        )
+
+    return None
 
 
 def _validate_information_items(

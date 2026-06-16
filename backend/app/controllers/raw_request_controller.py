@@ -9,18 +9,23 @@ from app.schemas import (
     FrontendToControllerRequest,
     PlanningCreateInput,
     PlanningCreateOutput,
+    PlanningMainTask,
+    PlanningRevisionInput,
+    PlanningRevisionOutput,
+    PlanningRevisionResponseInput,
     PlanningResponseInput,
     QuestioningDecision,
     ResponseOutput,
 )
 from app.services.modules.context_engineering import build_context_from_raw_input
-from app.services.modules.planning import build_initial_planning
+from app.services.modules.planning import build_initial_planning, build_revised_planning
 from app.services.modules.questioning import evaluate_questioning_need
 from app.services.modules.output_structuring.service import (
     build_structured_task_output,
 )
 from app.services.persistence import (
     get_follow_up_round_count,
+    get_structured_task_output,
     increment_follow_up_round_count,
     reset_follow_up_round_count,
     save_structured_task_output,
@@ -28,6 +33,7 @@ from app.services.persistence import (
 )
 from app.services.modules.response import (
     build_response_from_planning,
+    build_response_from_planning_revision,
     build_response_from_questioning,
 )
 
@@ -47,8 +53,12 @@ class RawRequestFlowContext:
     questioning_decision: QuestioningDecision | None = None
     response_output: ResponseOutput | None = None
     planning_input: PlanningCreateInput | None = None
+    planning_revision_input: PlanningRevisionInput | None = None
     planning_output: PlanningCreateOutput | None = None
+    planning_revision_output: PlanningRevisionOutput | None = None
+    existing_structured_task_output: dict[str, Any] | None = None
     structured_task_output: dict[str, Any] | None = None
+    planning_mode: str = "create"
     reply_created_at: datetime | None = None
     current_stage: str = RAW_REQUEST_START_STAGE
     traversed_history: list[str] = field(
@@ -116,9 +126,16 @@ class RawRequestController:
         self._transition(context, next_stage="F003")
 
     def _run_stage_f003(self, context: RawRequestFlowContext) -> None:
+        context.existing_structured_task_output = get_structured_task_output(
+            context.conversation_id
+        )
+        existing_plan_outline = self._build_existing_plan_outline(
+            context.existing_structured_task_output
+        )
         context.context_output = build_context_from_raw_input(
             user_input=context.request.user_input,
             conversation_id=context.conversation_id,
+            existing_plan_outline=existing_plan_outline,
         )
         self._transition(context, next_stage="F004")
 
@@ -127,9 +144,14 @@ class RawRequestController:
             raise ValueError("context_output 尚未建立。")
 
         follow_up_round_count = get_follow_up_round_count(context.conversation_id)
+        existing_plan_outline = self._build_existing_plan_outline(
+            context.existing_structured_task_output
+        )
         context.questioning_decision = evaluate_questioning_need(
             context_output=context.context_output,
             follow_up_round_count=follow_up_round_count,
+            has_existing_plan=context.existing_structured_task_output is not None,
+            existing_plan_outline=existing_plan_outline,
         )
         self._transition(context, next_stage="F005")
 
@@ -183,15 +205,35 @@ class RawRequestController:
         if context.context_output is None:
             raise ValueError("context_output 尚未建立。")
 
-        context.planning_input = PlanningCreateInput(
-            requirement_context=context.context_output.requirement_context,
-            known_information=context.context_output.known_information,
-            pending_confirmation=context.context_output.pending_confirmation,
-            conversation_history_text=context.context_output.conversation_history_text,
-        )
+        if self._should_run_revision(context):
+            context.planning_mode = "revise"
+            context.planning_revision_input = self._build_planning_revision_input(
+                context
+            )
+        else:
+            self._ensure_create_planning_is_safe(context)
+            context.planning_mode = "create"
+            context.planning_input = PlanningCreateInput(
+                requirement_context=context.context_output.requirement_context,
+                known_information=context.context_output.known_information,
+                pending_confirmation=context.context_output.pending_confirmation,
+                conversation_history_text=context.context_output.conversation_history_text,
+            )
         self._transition(context, next_stage="F009")
 
     def _run_stage_f009(self, context: RawRequestFlowContext) -> None:
+        if context.planning_mode == "revise":
+            if context.planning_revision_input is None:
+                raise ValueError("planning_revision_input 尚未建立。")
+            context.planning_revision_output = build_revised_planning(
+                context.planning_revision_input
+            )
+            context.planning_output = self._merge_revision_into_planning_output(
+                context
+            )
+            self._transition(context, next_stage="F010")
+            return
+
         if context.planning_input is None:
             raise ValueError("planning_input 尚未建立。")
 
@@ -219,13 +261,25 @@ class RawRequestController:
         save_structured_task_output(
             context.conversation_id, context.structured_task_output
         )
-        context.response_output = build_response_from_planning(
-            PlanningResponseInput(
-                plan_summary=context.planning_output.plan_summary,
-                design_rationale=context.planning_output.design_rationale,
-                structured_task_output=structured_task_output,
+        if context.planning_mode == "revise":
+            if context.planning_revision_output is None:
+                raise ValueError("planning_revision_output 尚未建立。")
+            context.response_output = build_response_from_planning_revision(
+                PlanningRevisionResponseInput(
+                    revision_summary=context.planning_revision_output.revision_summary,
+                    design_rationale=context.planning_revision_output.design_rationale,
+                    target_main_task_title=context.planning_revision_output.updated_main_task.title,
+                    structured_task_output=structured_task_output,
+                )
             )
-        )
+        else:
+            context.response_output = build_response_from_planning(
+                PlanningResponseInput(
+                    plan_summary=context.planning_output.plan_summary,
+                    design_rationale=context.planning_output.design_rationale,
+                    structured_task_output=structured_task_output,
+                )
+            )
         store_result = store_conversation_record(
             ConversationRecordStoreRequest(
                 conversation_id=context.conversation_id,
@@ -274,3 +328,142 @@ class RawRequestController:
             return value.astimezone(timezone.utc)
 
         return value.replace(tzinfo=timezone.utc)
+
+    def _should_run_revision(self, context: RawRequestFlowContext) -> bool:
+        if context.existing_structured_task_output is None:
+            return False
+        if context.context_output is None or context.context_output.planning_intent is None:
+            return False
+
+        planning_intent = context.context_output.planning_intent
+        if planning_intent.intent_type != "revise":
+            return False
+        if planning_intent.target_main_task_order is None:
+            raise ValueError("revision planning 缺少 target_main_task_order。")
+
+        self._get_target_main_task(
+            context.existing_structured_task_output,
+            planning_intent.target_main_task_order,
+        )
+        return True
+
+    def _ensure_create_planning_is_safe(self, context: RawRequestFlowContext) -> None:
+        if context.existing_structured_task_output is None:
+            return
+        if context.context_output is None or context.context_output.planning_intent is None:
+            raise ValueError("已有既有排程，但缺少 planning_intent，不能安全重新規劃。")
+
+        planning_intent = context.context_output.planning_intent
+        if planning_intent.intent_type == "create" and planning_intent.confidence != "low":
+            return
+
+        raise ValueError("已有既有排程，但本輪意圖不足以安全建立新規劃。")
+
+    def _build_planning_revision_input(
+        self,
+        context: RawRequestFlowContext,
+    ) -> PlanningRevisionInput:
+        if context.context_output is None:
+            raise ValueError("context_output 尚未建立。")
+        if context.existing_structured_task_output is None:
+            raise ValueError("existing_structured_task_output 尚未建立。")
+        if context.context_output.planning_intent is None:
+            raise ValueError("planning_intent 尚未建立。")
+
+        target_order = context.context_output.planning_intent.target_main_task_order
+        if target_order is None:
+            raise ValueError("revision planning 缺少 target_main_task_order。")
+
+        return PlanningRevisionInput(
+            requirement_context=context.context_output.requirement_context,
+            known_information=context.context_output.known_information,
+            pending_confirmation=context.context_output.pending_confirmation,
+            conversation_history_text=context.context_output.conversation_history_text,
+            existing_plan_outline=self._build_existing_plan_outline(
+                context.existing_structured_task_output
+            ),
+            target_main_task=self._get_target_main_task(
+                context.existing_structured_task_output,
+                target_order,
+            ),
+            target_main_task_order=target_order,
+            revision_request=context.request.user_input,
+        )
+
+    def _merge_revision_into_planning_output(
+        self,
+        context: RawRequestFlowContext,
+    ) -> PlanningCreateOutput:
+        if context.existing_structured_task_output is None:
+            raise ValueError("existing_structured_task_output 尚未建立。")
+        if context.planning_revision_output is None:
+            raise ValueError("planning_revision_output 尚未建立。")
+
+        main_tasks = self._extract_planning_main_tasks(
+            context.existing_structured_task_output
+        )
+        target_order = context.planning_revision_output.target_main_task_order
+        merged_tasks: list[PlanningMainTask] = []
+        replaced = False
+        for main_task in main_tasks:
+            if main_task.order == target_order:
+                merged_tasks.append(context.planning_revision_output.updated_main_task)
+                replaced = True
+                continue
+            merged_tasks.append(main_task)
+
+        if not replaced:
+            raise ValueError("找不到可替換的 revision target main task。")
+
+        return PlanningCreateOutput(
+            plan_summary=context.planning_revision_output.revision_summary,
+            design_rationale=context.planning_revision_output.design_rationale,
+            assumptions_used=context.planning_revision_output.assumptions_used,
+            schedule={"main_tasks": merged_tasks},
+        )
+
+    def _build_existing_plan_outline(
+        self,
+        structured_task_output: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        if structured_task_output is None:
+            return []
+
+        outline: list[dict[str, Any]] = []
+        for main_task in structured_task_output.get("main_tasks", []):
+            if not isinstance(main_task, dict):
+                continue
+            order = main_task.get("order")
+            title = main_task.get("title")
+            if not isinstance(order, int) or not isinstance(title, str):
+                continue
+            outline.append(
+                {
+                    "order": order,
+                    "title": title,
+                    "description": main_task.get("description"),
+                }
+            )
+
+        return outline
+
+    def _get_target_main_task(
+        self,
+        structured_task_output: dict[str, Any],
+        target_order: int,
+    ) -> PlanningMainTask:
+        for main_task in self._extract_planning_main_tasks(structured_task_output):
+            if main_task.order == target_order:
+                return main_task
+
+        raise ValueError(f"找不到 target_main_task_order={target_order} 的既有主任務。")
+
+    def _extract_planning_main_tasks(
+        self,
+        structured_task_output: dict[str, Any],
+    ) -> list[PlanningMainTask]:
+        main_tasks = structured_task_output.get("main_tasks")
+        if not isinstance(main_tasks, list):
+            raise ValueError("existing structured_task_output 缺少 main_tasks。")
+
+        return [PlanningMainTask.model_validate(main_task) for main_task in main_tasks]

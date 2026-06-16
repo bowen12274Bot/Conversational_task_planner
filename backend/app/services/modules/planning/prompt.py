@@ -32,6 +32,36 @@ def build_planning_create_ai_request(
     )
 
 
+def build_planning_revision_ai_request(
+    *,
+    requirement_context: str,
+    known_information: list[dict[str, Any]],
+    pending_confirmation: list[dict[str, Any]],
+    conversation_history_text: str | None,
+    existing_plan_outline: list[dict[str, Any]],
+    target_main_task: dict[str, Any],
+    target_main_task_order: int,
+    revision_request: str,
+) -> ModuleToAIRequest:
+    prompt_spec = build_planning_revision_prompt_spec(
+        requirement_context=requirement_context,
+        known_information=known_information,
+        pending_confirmation=pending_confirmation,
+        conversation_history_text=conversation_history_text,
+        existing_plan_outline=existing_plan_outline,
+        target_main_task=target_main_task,
+        target_main_task_order=target_main_task_order,
+        revision_request=revision_request,
+    )
+
+    return ModuleToAIRequest(
+        task_type=TASK_TYPE,
+        group_name="planning_revision",
+        capability_level=CAPABILITY_LEVEL,
+        input_data=prompt_spec["input_data"],
+        format_requirements=prompt_spec["format_requirements"],
+    )
+
 def build_planning_create_prompt_spec(
     *,
     requirement_context: str,
@@ -57,6 +87,162 @@ def build_planning_create_prompt_spec(
             "output_target": _build_output_target(),
         },
         "format_requirements": _build_format_requirements(),
+    }
+
+
+def build_planning_revision_prompt_spec(
+    *,
+    requirement_context: str,
+    known_information: list[dict[str, Any]],
+    pending_confirmation: list[dict[str, Any]],
+    conversation_history_text: str | None,
+    existing_plan_outline: list[dict[str, Any]],
+    target_main_task: dict[str, Any],
+    target_main_task_order: int,
+    revision_request: str,
+) -> dict[str, Any]:
+    normalized_context = requirement_context.strip()
+    normalized_request = revision_request.strip()
+    if not normalized_context:
+        raise ValueError("requirement_context 不可為空白。")
+    if not normalized_request:
+        raise ValueError("revision_request 不可為空白。")
+    if target_main_task_order < 1:
+        raise ValueError("target_main_task_order 必須大於 0。")
+
+    return {
+        "input_data": {
+            "rules": _build_revision_rules_text(),
+            "task": _build_revision_task_text(),
+            "context": {
+                "requirement_context": normalized_context,
+                "revision_request": normalized_request,
+                "known_information": known_information,
+                "pending_confirmation": pending_confirmation,
+                "conversation_history_text": conversation_history_text,
+                "existing_plan_outline": existing_plan_outline,
+                "target_main_task_order": target_main_task_order,
+                "target_main_task": target_main_task,
+            },
+            "examples": _build_revision_examples(),
+            "output_target": _build_revision_output_target(),
+        },
+        "format_requirements": _build_revision_format_requirements(),
+    }
+
+
+def _build_revision_rules_text() -> str:
+    return (
+        "You are a planning revision assistant. "
+        "Your job is to revise exactly one target main task from an existing structured plan. "
+        "Your response must be one raw JSON object only. "
+        "Do not output analysis, reasoning steps, markdown, code fences, labels, or any text before or after the JSON object. "
+        "Use revision_request as the requested change and target_main_task as the only editable task. "
+        "Use existing_plan_outline only to keep the revised task compatible with the full plan. "
+        "Preserve target_main_task_order and do not return or rewrite non-target main tasks. "
+        "Use known_information as confirmed facts and treat pending_confirmation as unresolved context. "
+        "If the user asks for more detail, improve the target task description and subtasks with useful, concrete steps. "
+        "Do not invent major deadlines, progress, or constraints that are not supported by the input."
+    )
+
+
+def _build_revision_task_text() -> str:
+    return (
+        "Return revision_summary, design_rationale, assumptions_used, target_main_task_order, and updated_main_task. "
+        "updated_main_task must use the same structure as a main task: title, description, estimated_time, order, and subtasks. "
+        "Use Traditional Chinese for all user-facing text fields. "
+        "Return the final answer directly as one valid JSON object without any additional commentary."
+    )
+
+
+def _build_revision_output_target() -> str:
+    return (
+        "Return one JSON object containing revision_summary, design_rationale, assumptions_used, "
+        "target_main_task_order, and updated_main_task. The output must start with '{' and end with '}'."
+    )
+
+
+def _build_revision_examples() -> list[dict[str, Any]]:
+    return [
+        {
+            "input": {
+                "revision_request": "請把第一階段再拆得更細，補充可以練習的情境。",
+                "existing_plan_outline": [
+                    {"order": 1, "title": "第一階段情境重點規劃"},
+                    {"order": 2, "title": "學習管道與工具建議"},
+                ],
+                "target_main_task_order": 1,
+                "target_main_task": {
+                    "title": "第一階段情境重點規劃",
+                    "description": "鎖定常見生活與商務情境。",
+                    "estimated_time": "1 小時",
+                    "order": 1,
+                    "subtasks": [
+                        {
+                            "title": "核心情境分類",
+                            "description": "整理常見情境。",
+                            "priority": "high",
+                            "estimated_time": "30 分鐘",
+                            "order": 1,
+                        }
+                    ],
+                },
+            },
+            "output": {
+                "revision_summary": "已將第一階段細化為更具體的情境練習安排。",
+                "design_rationale": "使用者要求補充練習情境，因此保留原階段目標並增加可執行的子任務。",
+                "assumptions_used": [],
+                "target_main_task_order": 1,
+                "updated_main_task": {
+                    "title": "第一階段情境重點規劃",
+                    "description": "針對高頻生活與商務情境建立練習清單，並搭配基礎文法應用。",
+                    "estimated_time": "1 小時",
+                    "order": 1,
+                    "subtasks": [
+                        {
+                            "title": "生活情境練習",
+                            "description": "練習交通、餐廳、購物與住宿等常見情境用語。",
+                            "priority": "high",
+                            "estimated_time": "30 分鐘",
+                            "order": 1,
+                        },
+                        {
+                            "title": "商務情境練習",
+                            "description": "練習會議、郵件與電話溝通中的常見句型。",
+                            "priority": "medium",
+                            "estimated_time": "30 分鐘",
+                            "order": 2,
+                        },
+                    ],
+                },
+            },
+        }
+    ]
+
+
+def _build_revision_format_requirements() -> dict[str, Any]:
+    return {
+        "output_type": "json_object",
+        "required_fields": [
+            "revision_summary",
+            "design_rationale",
+            "assumptions_used",
+            "target_main_task_order",
+            "updated_main_task",
+        ],
+        "requirements": [
+            "revision_summary must be a non-empty Traditional Chinese string.",
+            "design_rationale must be a non-empty Traditional Chinese string.",
+            "assumptions_used must be a list of strings.",
+            "target_main_task_order must match the input target_main_task_order.",
+            "updated_main_task must contain title, description, estimated_time, order, and subtasks.",
+            "updated_main_task.order must match target_main_task_order.",
+            "Each subtask must contain title, description, priority, estimated_time, and order.",
+            "priority must be one of high, medium, or low.",
+            "Return exactly one JSON object and nothing else.",
+            "Do not return the full plan or non-target main tasks.",
+            "Do not output analysis, thinking process, bullet points, markdown, or code fences.",
+        ],
     }
 
 

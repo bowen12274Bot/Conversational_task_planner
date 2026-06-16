@@ -1,6 +1,7 @@
 from app.schemas import (
     PlanningResponseInput,
     StructuredMainTaskOutput,
+    StructuredSummaryMetricsOutput,
     StructuredTaskOutput,
 )
 from app.services.modules.response.prompt import (
@@ -15,6 +16,11 @@ def test_build_planning_response_ai_request_contains_expected_sections() -> None
             design_rationale="期限明確且任務尚未開始，因此先排需求確認與核心功能。",
             structured_task_output=StructuredTaskOutput(
                 plan_summary="先完成需求確認，再安排核心實作與測試。",
+                summary_metrics=StructuredSummaryMetricsOutput(
+                    total_estimated_time_text="約 2 小時",
+                    daily_time_budget_text="待確認",
+                    estimated_completion_text="待確認",
+                ),
                 main_tasks=[
                     StructuredMainTaskOutput(
                         title="需求確認",

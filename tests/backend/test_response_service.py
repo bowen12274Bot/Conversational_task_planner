@@ -90,3 +90,37 @@ def test_build_response_from_chat_returns_chat_answer_without_ai_call() -> None:
 
     assert result.response_type == "chat_answer"
     assert result.reply_text == "第三階段可以用限時模考搭配錯題分類。"
+
+
+def test_build_response_from_chat_normalizes_markdown_lite_text() -> None:
+    result = response_service.build_response_from_chat(
+        ChatResponseInput(
+            chat_output=ChatModuleOutput(
+                answer_types=["execution_advice", "resource_suggestion"],
+                answer=(
+                    "### 練習方向\n"
+                    "- 核心模組：\n"
+                    "- **每週完成 1-2 回限時模考**\n"
+                    "*   **前端 (Frontend):** 使用 HTML、CSS、JavaScript。\n"
+                    "* 整理 `錯題類型`\n\n"
+                    "- 學習管道：\n"
+                    "1) 官方範例題\n"
+                    "2. 可計時的線上題庫"
+                ),
+                referenced_plan=None,
+                suggested_follow_up_actions=[],
+            )
+        )
+    )
+
+    assert result.reply_text == (
+        "練習方向\n"
+        "\n"
+        "核心模組：\n"
+        "- 每週完成 1-2 回限時模考\n"
+        "- 前端 (Frontend): 使用 HTML、CSS、JavaScript。\n"
+        "- 整理 錯題類型\n\n"
+        "學習管道：\n"
+        "1. 官方範例題\n"
+        "2. 可計時的線上題庫"
+    )

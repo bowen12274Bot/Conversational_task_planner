@@ -47,6 +47,8 @@ Use the existing plan only as context for answering the question.
 If the user asks how to execute, understand, evaluate, or find resources for a plan item, answer the question directly.
 Do not claim that an action was performed in the system.
 If the answer includes possible changes, present them only as suggestions for a future revision.
+Prefer concise plain text with short headings or '-' bullets when useful.
+Avoid Markdown emphasis markers such as **, ###, and backticks.
 Return only a JSON object.
 ```
 

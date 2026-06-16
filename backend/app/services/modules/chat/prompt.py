@@ -67,6 +67,8 @@ def _build_task_text() -> str:
         "If the user asks how to execute, understand, evaluate, or find resources for a plan item, answer directly. "
         "If you mention possible next actions, present them as suggestions only. "
         "Do not claim that an action was performed in the system. "
+        "Prefer concise plain text with short headings or '-' bullets when useful. "
+        "Avoid Markdown emphasis markers such as **, ###, and backticks. "
         "Use Traditional Chinese for user-facing text. "
         "Return one valid JSON object only."
     )
